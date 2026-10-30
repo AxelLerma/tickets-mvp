@@ -1,0 +1,40 @@
+@import "tailwindcss";
+
+@theme {
+  --color-institucional: #2b3a55;
+  --color-institucional-oscuro: #1e2a40;
+  --color-fondo: #f6f6f4;
+  --color-borde: #d6d6d1;
+  --color-tinta: #1d1d1b;
+  --color-suave: #66665f;
+  --color-error: #9b1c1c;
+  --font-sans: "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+body {
+  @apply bg-fondo text-tinta antialiased;
+}
+
+@layer components {
+  .titulo-pagina {
+    @apply mb-6 text-xl font-semibold tracking-tight;
+  }
+  .panel {
+    @apply rounded-sm border border-borde bg-white;
+  }
+  .etiqueta {
+    @apply mb-1 block text-sm font-medium;
+  }
+  .entrada {
+    @apply w-full rounded-sm border border-borde bg-white px-3 py-3 text-base outline-none focus:border-institucional focus:ring-1 focus:ring-institucional;
+  }
+  .boton {
+    @apply inline-flex min-h-12 cursor-pointer items-center justify-center rounded-sm bg-institucional px-5 text-sm font-medium text-white hover:bg-institucional-oscuro disabled:cursor-not-allowed disabled:opacity-60;
+  }
+  .boton-secundario {
+    @apply inline-flex min-h-12 cursor-pointer items-center justify-center rounded-sm border border-borde bg-white px-5 text-sm font-medium hover:bg-fondo;
+  }
+  .alerta-error {
+    @apply rounded-sm border border-error/30 bg-error/5 px-4 py-3 text-sm text-error;
+  }
+}
