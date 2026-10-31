@@ -28,3 +28,34 @@ export function fechaHora(iso: string | null): string {
 export function estaVencido(ticket: Ticket): boolean {
   return new Date(ticket.fechaObjetivo) < new Date();
 }
+
+export const ETIQUETAS_ETAPA: Record<string, string> = {
+  inicial_reportante: "Inicial (reportante)",
+  inicial_tecnico: "Inicial (técnico)",
+  cierre: "Cierre",
+};
+
+export const ETIQUETAS_EVENTO: Record<string, string> = {
+  creacion: "Ticket creado",
+  asignacion_automatica: "Asignación automática",
+  cambio_estado: "Cambio de estado",
+  troubleshooting_agregado: "Paso de troubleshooting registrado",
+  espera_iniciada: "Información solicitada al reportante",
+  espera_terminada: "Atención reanudada",
+  evidencia_agregada: "Evidencia agregada",
+  evidencia_reemplazada: "Evidencia reemplazada",
+  cierre: "Cierre validado",
+  reapertura: "Reapertura",
+  cancelacion: "Cancelación",
+};
+
+export function tamanoLegible(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+export function duracion(minutos: number): string {
+  const h = Math.floor(minutos / 60);
+  const m = minutos % 60;
+  return h > 0 ? `${h} h ${m} min` : `${m} min`;
+}

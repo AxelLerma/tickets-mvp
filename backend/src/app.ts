@@ -9,6 +9,8 @@ import managerRoutes from "./routes/manager.routes";
 import tecnicoRoutes from "./routes/tecnico.routes";
 import ticketsRoutes from "./routes/tickets.routes";
 import adminRoutes from "./routes/admin.routes";
+import multer from "multer";
+import evidenciasRoutes from "./routes/evidencias.routes";
 
 export const app = express();
 
@@ -28,11 +30,16 @@ app.use((_req, res) => {
 });
 
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
-  if ((err as { code?: string }).code === "SQLITE_CONSTRAINT_UNIQUE") {
-    return res.status(409).json({ error: "Ya existe un registro con ese nombre o correo." });
+  if (err instanceof multer.MulterError) {
+    const demasiadoGrande = err.code === "LIMIT_FILE_SIZE";
+    return res
+      .status(demasiadoGrande ? 413 : 400)
+      .json({ error: demasiadoGrande ? `El archivo excede el límite de ${config.maxUploadMb} MB.` : "No fue posible recibir el archivo." });
   }
   console.error(err);
   res.status(500).json({ error: "Error interno del servidor." });
 });
 
 app.use("/api/admin", adminRoutes);
+
+app.use("/api/evidencias", evidenciasRoutes);

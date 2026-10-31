@@ -12,7 +12,9 @@ const ENLACES: Record<Rol, { href: string; texto: string }[]> = {
   ],
   tecnico: [{ href: "/tecnico", texto: "Mi cola de trabajo" }],
   manager: [{ href: "/manager", texto: "Panel operativo" }],
-  admin: [{ href: "/manager", texto: "Panel operativo" }],
+  admin: [
+    { href: "/admin", texto: "Usuarios" },
+    { href: "/admin/catalogos", texto: "Catálogos" },],
 };
 
 const NOMBRE_ROL: Record<Rol, string> = {

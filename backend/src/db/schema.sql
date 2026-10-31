@@ -80,3 +80,69 @@ BEFORE DELETE ON bitacora_auditoria
 BEGIN
   SELECT RAISE(ABORT, 'La bitácora es inmutable');
 END;
+
+CREATE TABLE IF NOT EXISTS ticket_intervencion (
+  ticket_id INTEGER PRIMARY KEY REFERENCES tickets(id),
+  como_se_encontro TEXT,
+  que_se_hizo TEXT,
+  como_se_dejo TEXT,
+  materiales TEXT
+);
+
+CREATE TABLE IF NOT EXISTS ticket_troubleshooting (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ticket_id INTEGER NOT NULL REFERENCES tickets(id),
+  tecnico_id INTEGER NOT NULL REFERENCES usuarios(id),
+  descripcion_paso TEXT NOT NULL,
+  resultado TEXT NOT NULL,
+  minutos INTEGER NOT NULL CHECK (minutos > 0),
+  creado_en TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_pasos_ticket ON ticket_troubleshooting(ticket_id);
+
+CREATE TABLE IF NOT EXISTS ticket_esperas (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ticket_id INTEGER NOT NULL REFERENCES tickets(id),
+  usuario_id INTEGER NOT NULL REFERENCES usuarios(id),
+  motivo TEXT NOT NULL,
+  inicio TEXT NOT NULL,
+  fin TEXT
+);
+
+CREATE TABLE IF NOT EXISTS ticket_comentarios (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ticket_id INTEGER NOT NULL REFERENCES tickets(id),
+  usuario_id INTEGER REFERENCES usuarios(id),
+  texto TEXT NOT NULL,
+  tipo TEXT NOT NULL DEFAULT 'comentario' CHECK (tipo IN ('comentario', 'sistema')),
+  creado_en TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_comentarios_ticket ON ticket_comentarios(ticket_id);
+
+CREATE TABLE IF NOT EXISTS ticket_evidencias (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ticket_id INTEGER NOT NULL REFERENCES tickets(id),
+  subido_por_id INTEGER NOT NULL REFERENCES usuarios(id),
+  etapa TEXT NOT NULL CHECK (etapa IN ('inicial_reportante', 'inicial_tecnico', 'cierre')),
+  nombre_original TEXT NOT NULL,
+  mime_type TEXT NOT NULL,
+  tamano_bytes INTEGER NOT NULL,
+  ruta_archivo TEXT NOT NULL,
+  ruta_miniatura TEXT,
+  reemplazada_por_id INTEGER REFERENCES ticket_evidencias(id),
+  creado_en TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_evidencias_ticket ON ticket_evidencias(ticket_id);
+
+-- Ni la evidencia ni el troubleshooting se borran; los pasos tampoco se editan.
+CREATE TRIGGER IF NOT EXISTS evidencias_sin_delete
+BEFORE DELETE ON ticket_evidencias
+BEGIN SELECT RAISE(ABORT, 'La evidencia no se elimina'); END;
+
+CREATE TRIGGER IF NOT EXISTS pasos_sin_update
+BEFORE UPDATE ON ticket_troubleshooting
+BEGIN SELECT RAISE(ABORT, 'El troubleshooting es inmutable'); END;
+
+CREATE TRIGGER IF NOT EXISTS pasos_sin_delete
+BEFORE DELETE ON ticket_troubleshooting
+BEGIN SELECT RAISE(ABORT, 'El troubleshooting es inmutable'); END;

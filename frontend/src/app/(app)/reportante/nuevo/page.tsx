@@ -3,21 +3,30 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
-import { api, useApi } from "@/lib/api";
+import { api, subirArchivo, useApi } from "@/lib/api";
 import { ETIQUETAS_IMPACTO } from "@/lib/formato";
 import type { Opcion, Ticket } from "@/lib/tipos";
 
 export default function NuevoTicket() {
   const router = useRouter();
   const { datos: catalogos, error: errorCatalogos } = useApi<{ categorias: Opcion[]; sedes: Opcion[] }>("/catalogos");
+  
   const [error, setError] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
+  const [aviso, setAviso] = useState<{ id: number; mensaje: string } | null>(null);
+  const [progreso, setProgreso] = useState<string | null>(null);
 
   async function enviar(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
+    const archivos = (f.getAll("archivos") as File[]).filter((a) => a.size > 0);
+    
     setError(null);
+    setAviso(null);
     setEnviando(true);
+    
+    let ticket: Ticket;
+    
     try {
       const r = await api<{ ticket: Ticket }>("/tickets", {
         method: "POST",
@@ -31,11 +40,29 @@ export default function NuevoTicket() {
           impacto: f.get("impacto"),
         }),
       });
-      router.push(`/tickets/${r.ticket.id}`);
+      ticket = r.ticket;
     } catch (err) {
       setError(err instanceof Error ? err.message : "No fue posible registrar el reporte.");
       setEnviando(false);
+      return;
     }
+    
+    try {
+      for (const [i, archivo] of archivos.entries()) {
+        setProgreso(`Subiendo archivo ${i + 1} de ${archivos.length}…`);
+        await subirArchivo(archivo, { ticketId: String(ticket.id), etapa: "inicial_reportante" });
+      }
+    } catch (err) {
+      setProgreso(null);
+      setEnviando(false);
+      setAviso({
+        id: ticket.id,
+        mensaje: `Su reporte ${ticket.folio || ''} se registró, pero un archivo no pudo subirse: ${err instanceof Error ? err.message : "error desconocido"}`,
+      });
+      return;
+    }
+    
+    router.push(`/tickets/${ticket.id}`);
   }
 
   return (
@@ -46,6 +73,13 @@ export default function NuevoTicket() {
       <h1 className="titulo-pagina mt-3">Reportar problema</h1>
 
       {(error || errorCatalogos) && <div className="alerta-error mb-4">{error ?? errorCatalogos}</div>}
+      
+      {aviso && (
+        <div className="alerta-error mb-4">
+          {aviso.mensaje}{" "}
+          <Link href={`/tickets/${aviso.id}`} className="underline">Ver reporte y adjuntar de nuevo</Link>
+        </div>
+      )}
 
       <form onSubmit={enviar} className="panel space-y-5 p-6">
         <div>
@@ -125,8 +159,15 @@ export default function NuevoTicket() {
           </div>
         </fieldset>
 
+        <div>
+          <label htmlFor="archivos" className="etiqueta">
+            Evidencia <span className="font-normal text-suave">(opcional: foto, captura o video corto)</span>
+          </label>
+          <input id="archivos" name="archivos" type="file" multiple accept="image/*,video/*,application/pdf" className="entrada" />
+        </div>
+
         <button type="submit" disabled={enviando} className="boton w-full">
-          {enviando ? "Enviando…" : "Enviar reporte"}
+          {enviando ? (progreso ?? "Enviando…") : "Enviar reporte"}
         </button>
       </form>
     </div>

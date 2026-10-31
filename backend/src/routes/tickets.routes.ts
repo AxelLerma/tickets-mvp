@@ -1,29 +1,64 @@
 import { Router } from "express";
 import { z } from "zod";
+import { ErrorNegocio } from "../core/errores";
 import { autenticar, requiereRol } from "../middleware/auth";
-import { crearTicket, listarDelReportante, obtenerPorId, puedeVer } from "../services/ticket.service";
+import {
+  cancelarTicket,
+  cerrarTicket,
+  comentar,
+  guardarDatosCierre,
+  iniciarAtencion,
+  obtenerDetalle,
+  reabrirTicket,
+  reanudarAtencion,
+  registrarPaso,
+  solicitarInformacion,
+} from "../services/atencion.service";
+import { crearTicket, listarDelReportante } from "../services/ticket.service";
 
 const router = Router();
 router.use(autenticar);
 
+/** Valida el cuerpo y, si falla, responde con el primer mensaje en español. */
+function validar<T extends z.ZodType>(esquema: T, cuerpo: unknown): z.infer<T> {
+  const r = esquema.safeParse(cuerpo);
+  if (!r.success) throw new ErrorNegocio(r.error.issues[0].message);
+  return r.data;
+}
+
+const idDe = (req: { params: Record<string, string | string[] | undefined> }) => Number(req.params.id);
+
 const nuevoTicketSchema = z.object({
-  titulo: z.string().trim().min(1, "Escribe un título corto para identificar el problema.").max(120),
-  categoriaId: z.number().int().positive("Selecciona una categoría."),
-  sedeId: z.number().int().positive("Selecciona una sede."),
-  area: z.string().trim().min(1, "Indica el área o zona.").max(100),
+  titulo: z.string().trim().min(1, "Escriba un título corto para identificar el problema.").max(120),
+  categoriaId: z.number().int().positive("Seleccione una categoría."),
+  sedeId: z.number().int().positive("Seleccione una sede."),
+  area: z.string().trim().min(1, "Indique el área o zona.").max(100),
   equipoActivo: z.string().trim().max(120).default(""),
-  descripcion: z.string().trim().min(1, "Cuéntanos qué ocurre y desde cuándo.").max(4000),
-  impacto: z.enum(["solo_yo", "varias_personas", "operacion_detenida"], {
-    message: "Indica a quién afecta el problema.",
-  }),
+  descripcion: z.string().trim().min(1, "Cuéntenos qué ocurre y desde cuándo.").max(4000),
+  impacto: z.enum(["solo_yo", "varias_personas", "operacion_detenida"], { message: "Indique a quién afecta el problema." }),
 });
 
+const iniciarSchema = z.object({ comoSeEncontro: z.string().trim().max(4000).default("") });
+const pasoSchema = z.object({
+  descripcion: z.string().trim().min(1, "Describa el paso realizado.").max(2000),
+  resultado: z.string().trim().min(1, "Indique el resultado del paso.").max(2000),
+  minutos: z
+    .number({ message: "Indique los minutos dedicados." })
+    .int("Indique los minutos como número entero.")
+    .min(1, "Registre al menos 1 minuto.")
+    .max(1440, "El tiempo máximo por paso es de 24 horas."),
+});
+const esperaSchema = z.object({ motivo: z.string().trim().min(5, "Indique qué información se necesita.").max(1000) });
+const cierreSchema = z.object({
+  queSeHizo: z.string().trim().max(4000).default(""),
+  comoSeDejo: z.string().trim().max(4000).default(""),
+  materiales: z.string().trim().max(1000).default(""),
+});
+const motivoSchema = z.object({ motivo: z.string().trim().min(5, "Escriba el motivo (mínimo 5 caracteres).").max(1000) });
+const comentarioSchema = z.object({ texto: z.string().trim().min(1, "Escriba un comentario.").max(2000) });
+
 router.post("/", requiereRol("reportante"), (req, res) => {
-  const datos = nuevoTicketSchema.safeParse(req.body);
-  if (!datos.success) {
-    return res.status(400).json({ error: datos.error.issues[0].message });
-  }
-  const ticket = crearTicket(req.usuario!.id, datos.data);
+  const ticket = crearTicket(req.usuario!.id, validar(nuevoTicketSchema, req.body));
   res.status(201).json({ ticket });
 });
 
@@ -33,12 +68,52 @@ router.get("/mios", requiereRol("reportante"), (req, res) => {
 });
 
 router.get("/:id", (req, res) => {
-  const ticket = obtenerPorId(Number(req.params.id));
-  // 404 y no 403: no se revela que el ticket de otra persona existe
-  if (!ticket || !puedeVer(req.usuario!, ticket)) {
-    return res.status(404).json({ error: "Ticket no encontrado." });
-  }
-  res.json({ ticket });
+  res.json(obtenerDetalle(req.usuario!, idDe(req)));
+});
+
+router.post("/:id/iniciar", requiereRol("tecnico"), (req, res) => {
+  iniciarAtencion(req.usuario!, idDe(req), validar(iniciarSchema, req.body).comoSeEncontro);
+  res.json({ ok: true });
+});
+
+router.post("/:id/pasos", requiereRol("tecnico"), (req, res) => {
+  registrarPaso(req.usuario!, idDe(req), validar(pasoSchema, req.body));
+  res.status(201).json({ ok: true });
+});
+
+router.post("/:id/espera", requiereRol("tecnico"), (req, res) => {
+  solicitarInformacion(req.usuario!, idDe(req), validar(esperaSchema, req.body).motivo);
+  res.json({ ok: true });
+});
+
+router.post("/:id/espera/terminar", requiereRol("tecnico"), (req, res) => {
+  reanudarAtencion(req.usuario!, idDe(req));
+  res.json({ ok: true });
+});
+
+router.put("/:id/cierre", requiereRol("tecnico"), (req, res) => {
+  guardarDatosCierre(req.usuario!, idDe(req), validar(cierreSchema, req.body));
+  res.json({ ok: true });
+});
+
+router.post("/:id/cerrar", requiereRol("tecnico"), (req, res) => {
+  cerrarTicket(req.usuario!, idDe(req));
+  res.json({ ok: true });
+});
+
+router.post("/:id/reabrir", requiereRol("reportante", "manager"), (req, res) => {
+  reabrirTicket(req.usuario!, idDe(req), validar(motivoSchema, req.body).motivo);
+  res.json({ ok: true });
+});
+
+router.post("/:id/cancelar", requiereRol("manager"), (req, res) => {
+  cancelarTicket(req.usuario!, idDe(req), validar(motivoSchema, req.body).motivo);
+  res.json({ ok: true });
+});
+
+router.post("/:id/comentarios", requiereRol("reportante", "tecnico", "manager"), (req, res) => {
+  comentar(req.usuario!, idDe(req), validar(comentarioSchema, req.body).texto);
+  res.status(201).json({ ok: true });
 });
 
 export default router;

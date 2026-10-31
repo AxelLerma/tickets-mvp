@@ -32,3 +32,86 @@ export interface Opcion {
   id: number;
   nombre: string;
 }
+
+export type Etapa = "inicial_reportante" | "inicial_tecnico" | "cierre";
+
+export interface Comentario {
+  id: number;
+  texto: string;
+  tipo: "comentario" | "sistema";
+  creadoEn: string;
+  autor: string | null;
+  rolAutor: Rol | null;
+}
+
+export interface Evidencia {
+  id: number;
+  etapa: Etapa;
+  nombre: string;
+  mime: string;
+  tamano: number;
+  tieneMiniatura: boolean;
+  reemplazadaPor: number | null;
+  creadoEn: string;
+  autor: string;
+}
+
+export interface Paso {
+  id: number;
+  descripcion: string;
+  resultado: string;
+  minutos: number;
+  creadoEn: string;
+  autor: string;
+}
+
+export interface Espera {
+  id: number;
+  motivo: string;
+  inicio: string;
+  fin: string | null;
+}
+
+export interface ControlesCierre {
+  queSeHizo: boolean;
+  comoSeDejo: boolean;
+  troubleshooting: boolean;
+  tiempo: boolean;
+  evidencia: boolean;
+  completo: boolean;
+}
+
+export interface DatosTecnico {
+  intervencion: { comoSeEncontro: string | null; queSeHizo: string | null; comoSeDejo: string | null; materiales: string | null };
+  pasos: Paso[];
+  esperas: Espera[];
+  cierre: ControlesCierre | null;
+}
+
+export interface EventoHistorial {
+  id: number;
+  fecha: string;
+  evento: string;
+  comentario: string | null;
+  usuario: string | null;
+  antes: Record<string, unknown> | null;
+  despues: Record<string, unknown> | null;
+}
+
+export interface Acciones {
+  iniciar: boolean;
+  registrarTrabajo: boolean;
+  comentar: boolean;
+  reabrir: boolean;
+  cancelar: boolean;
+  etapasEvidencia: Etapa[];
+}
+
+export interface Detalle {
+  ticket: Ticket;
+  comentarios: Comentario[];
+  evidencias: Evidencia[];
+  acciones: Acciones;
+  tecnico?: DatosTecnico;
+  historial?: EventoHistorial[];
+}
