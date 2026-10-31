@@ -40,6 +40,7 @@ const sembrar = db.transaction(() => {
   );
   insertarUsuario.run("Laura Méndez", "reportante@demo.mx", "5511111111", clave, "reportante", null);
   insertarUsuario.run("Carlos Ruiz", "tecnico.norte@demo.mx", "8122222222", clave, "tecnico", norte);
+  insertarUsuario.run("Marco Díaz", "tecnico.norte2@demo.mx", "8133333333", clave, "tecnico", norte);
   insertarUsuario.run("Ana Torres", "tecnico.sur@demo.mx", "5533333333", clave, "tecnico", sur);
   insertarUsuario.run("Jorge Salas", "manager@demo.mx", "5544444444", clave, "manager", null);
   insertarUsuario.run("Administrador", "admin@demo.mx", "5555555555", clave, "admin", null);

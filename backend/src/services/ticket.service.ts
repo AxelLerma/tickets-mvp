@@ -150,7 +150,7 @@ export function listarColaTecnico(tecnicoId: number): TicketVista[] {
 
 /** Control de acceso por propiedad: cada rol solo ve lo que le corresponde. */
 export function puedeVer(usuario: UsuarioSesion, ticket: TicketVista): boolean {
-  if (usuario.rol === "manager" || usuario.rol === "admin") return true;
+  if (usuario.rol === "manager") return true;
   if (usuario.rol === "tecnico") return ticket.tecnicoId === usuario.id;
   return ticket.reportanteId === usuario.id;
 }

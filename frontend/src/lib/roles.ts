@@ -4,13 +4,14 @@ export const RUTA_INICIO: Record<Rol, string> = {
   reportante: "/reportante",
   tecnico: "/tecnico",
   manager: "/manager",
-  admin: "/manager",
+  admin: "/admin",
 };
 
 const SECCIONES: Record<string, Rol[]> = {
   "/reportante": ["reportante"],
   "/tecnico": ["tecnico"],
-  "/manager": ["manager", "admin"],
+  "/manager": ["manager"],
+  "/admin": ["admin"],
 };
 
 /** Control de acceso de la interfaz. La autoridad real es el backend; esto solo evita pantallas que no corresponden. */

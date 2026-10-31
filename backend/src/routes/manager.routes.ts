@@ -4,7 +4,7 @@ import { resumenDashboard } from "../services/ticket.service";
 
 const router = Router();
 
-router.get("/dashboard", autenticar, requiereRol("manager", "admin"), (_req, res) => {
+router.get("/dashboard", autenticar, requiereRol("manager"), (_req, res) => {
   res.json(resumenDashboard());
 });
 

@@ -25,7 +25,8 @@ CREATE TABLE IF NOT EXISTS usuarios (
   password_hash TEXT NOT NULL,
   rol TEXT NOT NULL CHECK (rol IN ('reportante', 'tecnico', 'manager', 'admin')),
   region_id INTEGER REFERENCES regiones(id),
-  activo INTEGER NOT NULL DEFAULT 1
+  activo INTEGER NOT NULL DEFAULT 1,
+  sesion_version INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS tickets (

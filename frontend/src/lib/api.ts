@@ -27,16 +27,21 @@ export async function api<T>(ruta: string, opciones: RequestInit = {}): Promise<
 export function useApi<T>(ruta: string) {
   const [datos, setDatos] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [version, setVersion] = useState(0);
 
   useEffect(() => {
     let vigente = true;
     api<T>(ruta)
-      .then((respuesta) => vigente && setDatos(respuesta))
+      .then((respuesta) => {
+        if (!vigente) return;
+        setDatos(respuesta);
+        setError(null);
+      })
       .catch((e: Error) => vigente && setError(e.message));
     return () => {
       vigente = false;
     };
-  }, [ruta]);
+  }, [ruta, version]);
 
-  return { datos, error, cargando: !datos && !error };
+  return { datos, error, cargando: !datos && !error, recargar: () => setVersion((v) => v + 1) };
 }
