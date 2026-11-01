@@ -9,4 +9,6 @@ export const config = {
   produccion: process.env.NODE_ENV === "production",
   storageDir: path.resolve(process.env.STORAGE_DIR ?? "storage"),
   maxUploadMb: Number(process.env.MAX_UPLOAD_MB ?? 100),
+  ticketCooldownSeg: Number(process.env.TICKET_COOLDOWN_SEG ?? 30),
+  ticketsPorHora: Number(process.env.TICKETS_POR_HORA ?? 10),
 };

@@ -1,3 +1,4 @@
+import { config } from "../config";
 import { ErrorNegocio } from "../core/errores";
 import {
   ESTADOS,
@@ -57,6 +58,29 @@ const ORDEN_PRIORIDAD = `CASE t.prioridad WHEN 'alta' THEN 0 WHEN 'normal' THEN 
 
 export function crearTicket(reportanteId: number, datos: NuevoTicket): TicketVista {
   const ejecutar = db.transaction(() => {
+    // Límite de envío: evita reportes duplicados por clics repetidos o abuso.
+    const haceUnaHora = new Date(Date.now() - 3_600_000).toISOString();
+    const previos = db
+      .prepare(
+        `SELECT MAX(creado_en) AS ultimo,
+                SUM(CASE WHEN creado_en > ? THEN 1 ELSE 0 END) AS enLaHora
+           FROM tickets WHERE reportante_id = ?`,
+      )
+      .get(haceUnaHora, reportanteId) as { ultimo: string | null; enLaHora: number | null };
+
+    if (previos.ultimo) {
+      const faltan = Math.ceil(config.ticketCooldownSeg - (Date.now() - new Date(previos.ultimo).getTime()) / 1000);
+      if (faltan > 0) {
+        throw new ErrorNegocio(`Su reporte anterior se acaba de registrar. Espere ${faltan} segundos para enviar otro.`, 429);
+      }
+    }
+    if ((previos.enLaHora ?? 0) >= config.ticketsPorHora) {
+      throw new ErrorNegocio(
+        `Alcanzó el máximo de ${config.ticketsPorHora} reportes por hora. Si es urgente, comuníquese con la coordinación.`,
+        429,
+      );
+    }
+
     const sede = db
       .prepare("SELECT region_id AS regionId FROM sedes WHERE id = ? AND activo = 1")
       .get(datos.sedeId) as { regionId: number } | undefined;

@@ -1,19 +1,19 @@
 import { ETIQUETAS_ESTADO } from "@/lib/formato";
 
 const ESTILOS_ESTADO: Record<string, string> = {
-  nuevo: "border-stone-300 bg-stone-100 text-stone-700",
-  asignado: "border-indigo-200 bg-indigo-50 text-indigo-800",
-  en_proceso: "border-amber-200 bg-amber-50 text-amber-800",
-  listo_para_cerrar: "border-teal-200 bg-teal-50 text-teal-800",
-  cerrado: "border-emerald-200 bg-emerald-50 text-emerald-800",
-  reabierto: "border-red-200 bg-red-50 text-red-800",
-  cancelado: "border-stone-300 bg-stone-100 text-stone-500",
+  nuevo: "border-[#cbbfdc] bg-[#e6dff0] text-[#4b3f60]",
+  asignado: "border-[#c8aee6] bg-[#e4d5f5] text-[#4a1f78]",
+  en_proceso: "border-[#eaaccb] bg-[#f8d8e8] text-[#8c1f5c]",
+  listo_para_cerrar: "border-[#98cdd0] bg-[#cfe9ea] text-[#0a4a51]",
+  cerrado: "border-institucional bg-institucional text-white",
+  reabierto: "border-rosa bg-rosa text-white",
+  cancelado: "border-[#cfc7da] bg-[#e1dce8] text-[#756a85]",
 };
 
 export function InsigniaEstado({ estado }: { estado: string }) {
   return (
     <span
-      className={`inline-block whitespace-nowrap rounded-sm border px-2 py-0.5 text-xs font-medium ${
+      className={`inline-block whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium ${
         ESTILOS_ESTADO[estado] ?? ESTILOS_ESTADO.nuevo
       }`}
     >
@@ -23,14 +23,14 @@ export function InsigniaEstado({ estado }: { estado: string }) {
 }
 
 const ESTILOS_PRIORIDAD: Record<string, string> = {
-  alta: "text-red-700",
-  normal: "text-amber-700",
-  baja: "text-emerald-700",
+  alta: "text-[#b0206a]",
+  normal: "text-[#6b3a9a]",
+  baja: "text-institucional",
 };
 
 export function Prioridad({ valor }: { valor: string }) {
   return (
-    <span className={`inline-flex items-center gap-1.5 text-sm ${ESTILOS_PRIORIDAD[valor]}`}>
+    <span className={`inline-flex items-center gap-1.5 text-sm font-medium ${ESTILOS_PRIORIDAD[valor]}`}>
       <span className="h-2 w-2 rounded-full bg-current" />
       <span className="capitalize">{valor}</span>
     </span>

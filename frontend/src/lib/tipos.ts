@@ -37,6 +37,7 @@ export type Etapa = "inicial_reportante" | "inicial_tecnico" | "cierre";
 
 export interface Comentario {
   id: number;
+  autorId: number | null;
   texto: string;
   tipo: "comentario" | "sistema";
   creadoEn: string;
@@ -46,6 +47,7 @@ export interface Comentario {
 
 export interface Evidencia {
   id: number;
+  autorId: number;
   etapa: Etapa;
   nombre: string;
   mime: string;

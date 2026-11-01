@@ -67,13 +67,19 @@ export async function guardarEvidencia(usuario: UsuarioSesion, datos: DatosSubid
       throw new ErrorNegocio("Tipo de archivo no permitido. Use imagen (JPG, PNG, WebP), PDF o video (MP4, WebM, MOV).", 415);
     }
 
-    let anterior: { id: number; etapa: string } | undefined;
+    let anterior: { id: number; etapa: string; autorId: number } | undefined;
     if (datos.reemplazaId) {
       anterior = db
-        .prepare("SELECT id, etapa FROM ticket_evidencias WHERE id = ? AND ticket_id = ? AND reemplazada_por_id IS NULL")
-        .get(datos.reemplazaId, ticket.id) as { id: number; etapa: string } | undefined;
+        .prepare(
+          `SELECT id, etapa, subido_por_id AS autorId FROM ticket_evidencias
+            WHERE id = ? AND ticket_id = ? AND reemplazada_por_id IS NULL`,
+        )
+        .get(datos.reemplazaId, ticket.id) as { id: number; etapa: string; autorId: number } | undefined;
       if (!anterior || anterior.etapa !== datos.etapa) {
         throw new ErrorNegocio("La evidencia que intenta reemplazar no existe o ya fue reemplazada.");
+      }
+      if (anterior.autorId !== usuario.id) {
+        throw new ErrorNegocio("Solo quien adjuntó un archivo puede reemplazarlo.", 403);
       }
     }
 

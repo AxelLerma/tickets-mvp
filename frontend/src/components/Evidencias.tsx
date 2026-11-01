@@ -4,6 +4,7 @@ import { useState } from "react";
 import { subirArchivo } from "@/lib/api";
 import { ETIQUETAS_ETAPA, fechaHora, tamanoLegible } from "@/lib/formato";
 import type { Etapa, Evidencia } from "@/lib/tipos";
+import { useSesion } from "./SesionProvider";
 
 interface Props {
   ticketId: number;
@@ -18,6 +19,7 @@ function tipoCorto(mime: string): string {
 }
 
 export function Evidencias({ ticketId, evidencias, etapasPermitidas, alCambiar }: Props) {
+  const { usuario } = useSesion();
   const [elegida, setElegida] = useState<Etapa | null>(null);
   const [progreso, setProgreso] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -59,10 +61,10 @@ export function Evidencias({ ticketId, evidencias, etapasPermitidas, alCambiar }
                     src={`/api/evidencias/${ev.id}/miniatura`}
                     alt={ev.nombre}
                     loading="lazy"
-                    className="h-14 w-14 rounded-sm border border-borde object-cover"
+                    className="h-14 w-14 rounded-md border border-borde object-cover"
                   />
                 ) : (
-                  <span className="flex h-14 w-14 items-center justify-center rounded-sm border border-borde bg-fondo text-xs text-suave">
+                  <span className="flex h-14 w-14 items-center justify-center rounded-md border border-borde bg-lavanda text-xs text-suave">
                     {tipoCorto(ev.mime)}
                   </span>
                 )}
@@ -74,7 +76,7 @@ export function Evidencias({ ticketId, evidencias, etapasPermitidas, alCambiar }
                   {ev.reemplazadaPor && " · Reemplazada"}
                 </p>
               </div>
-              {!ev.reemplazadaPor && etapasPermitidas.includes(ev.etapa) && (
+              {!ev.reemplazadaPor && ev.autorId === usuario.id && etapasPermitidas.includes(ev.etapa) && (
                 <label className="cursor-pointer self-center text-sm text-institucional underline underline-offset-2">
                   Reemplazar
                   <input

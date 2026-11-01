@@ -1,16 +1,16 @@
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import express, { type NextFunction, type Request, type Response } from "express";
+import multer from "multer";
 import { config } from "./config";
 import { ErrorNegocio } from "./core/errores";
+import adminRoutes from "./routes/admin.routes";
 import authRoutes from "./routes/auth.routes";
 import catalogosRoutes from "./routes/catalogos.routes";
+import evidenciasRoutes from "./routes/evidencias.routes";
 import managerRoutes from "./routes/manager.routes";
 import tecnicoRoutes from "./routes/tecnico.routes";
 import ticketsRoutes from "./routes/tickets.routes";
-import adminRoutes from "./routes/admin.routes";
-import multer from "multer";
-import evidenciasRoutes from "./routes/evidencias.routes";
 
 export const app = express();
 
@@ -20,16 +20,25 @@ app.use(cookieParser());
 
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 app.use("/api/auth", authRoutes);
+app.use("/api/admin", adminRoutes);
 app.use("/api/catalogos", catalogosRoutes);
 app.use("/api/tickets", ticketsRoutes);
+app.use("/api/evidencias", evidenciasRoutes);
 app.use("/api/tecnico", tecnicoRoutes);
 app.use("/api/manager", managerRoutes);
 
+// Siempre después de todas las rutas
 app.use((_req, res) => {
   res.status(404).json({ error: "Ruta no encontrada." });
 });
 
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
+  if (err instanceof ErrorNegocio) {
+    return res.status(err.estado).json({ error: err.message });
+  }
+  if ((err as { code?: string }).code === "SQLITE_CONSTRAINT_UNIQUE") {
+    return res.status(409).json({ error: "Ya existe un registro con ese nombre o correo." });
+  }
   if (err instanceof multer.MulterError) {
     const demasiadoGrande = err.code === "LIMIT_FILE_SIZE";
     return res
@@ -39,7 +48,3 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   console.error(err);
   res.status(500).json({ error: "Error interno del servidor." });
 });
-
-app.use("/api/admin", adminRoutes);
-
-app.use("/api/evidencias", evidenciasRoutes);

@@ -283,7 +283,8 @@ export function obtenerDetalle(usuario: UsuarioSesion, id: number) {
 
   const comentarios = db
     .prepare(
-      `SELECT c.id, c.texto, c.tipo, c.creado_en AS creadoEn, u.nombre AS autor, u.rol AS rolAutor
+      `SELECT c.id, c.usuario_id AS autorId, c.texto, c.tipo, c.creado_en AS creadoEn,
+              u.nombre AS autor, u.rol AS rolAutor
          FROM ticket_comentarios c LEFT JOIN usuarios u ON u.id = c.usuario_id
         WHERE c.ticket_id = ? ORDER BY c.id`,
     )
@@ -293,9 +294,9 @@ export function obtenerDetalle(usuario: UsuarioSesion, id: number) {
   const evidencias = (
     db
       .prepare(
-        `SELECT e.id, e.etapa, e.nombre_original AS nombre, e.mime_type AS mime, e.tamano_bytes AS tamano,
-                e.ruta_miniatura IS NOT NULL AS tieneMiniatura, e.reemplazada_por_id AS reemplazadaPor,
-                e.creado_en AS creadoEn, u.nombre AS autor
+        `SELECT e.id, e.subido_por_id AS autorId, e.etapa, e.nombre_original AS nombre, e.mime_type AS mime,
+                e.tamano_bytes AS tamano, e.ruta_miniatura IS NOT NULL AS tieneMiniatura,
+                e.reemplazada_por_id AS reemplazadaPor, e.creado_en AS creadoEn, u.nombre AS autor
            FROM ticket_evidencias e JOIN usuarios u ON u.id = e.subido_por_id
           WHERE e.ticket_id = ? ${esReportante ? "AND e.etapa = 'inicial_reportante'" : ""}
           ORDER BY e.id`,
