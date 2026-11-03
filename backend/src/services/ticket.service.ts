@@ -168,28 +168,3 @@ export function puedeVer(usuario: UsuarioSesion, ticket: TicketVista): boolean {
   if (usuario.rol === "tecnico") return ticket.tecnicoId === usuario.id;
   return ticket.reportanteId === usuario.id;
 }
-
-export async function resumenDashboard() {
-  const tickets = await consultar<TicketVista>(
-    `${SELECT_TICKET} WHERE t.estado IN (${SQL_ESTADOS_ABIERTOS}) ORDER BY t.fecha_objetivo`,
-  );
-
-  const ahora = new Date().toISOString();
-  const totales = {
-    abiertos: tickets.length,
-    sinAsignar: tickets.filter((t) => t.estado === ESTADOS.NUEVO).length,
-    vencidos: tickets.filter((t) => t.fechaObjetivo < ahora).length,
-  };
-
-  const carga = await consultar(
-    `SELECT u.id, u.nombre, r.nombre AS region, COUNT(t.id) AS activos
-       FROM usuarios u
-       LEFT JOIN regiones r ON r.id = u.region_id
-       LEFT JOIN tickets t ON t.tecnico_id = u.id AND t.estado IN (${SQL_ESTADOS_ABIERTOS})
-      WHERE u.rol = 'tecnico' AND u.activo = TRUE
-      GROUP BY u.id, u.nombre, r.nombre
-      ORDER BY u.nombre`,
-  );
-
-  return { totales, carga, tickets };
-}

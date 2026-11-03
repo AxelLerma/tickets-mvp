@@ -1,15 +1,46 @@
 import { Router } from "express";
+import { z } from "zod";
 import { ErrorNegocio } from "../core/errores";
 import { ESTADOS, SQL_ESTADOS_ABIERTOS } from "../core/estados";
 import { consultar, uno } from "../db/connection";
 import { autenticar, requiereRol } from "../middleware/auth";
-import { resumenDashboard } from "../services/ticket.service";
+import { cambiarPrioridad, panelGestion, reasignarTickets } from "../services/gestion.service";
 
 const router = Router();
 router.use(autenticar, requiereRol("manager"));
 
-router.get("/dashboard", async (_req, res) => {
-  res.json(await resumenDashboard());
+function validar<T extends z.ZodType>(esquema: T, cuerpo: unknown): z.infer<T> {
+  const r = esquema.safeParse(cuerpo);
+  if (!r.success) throw new ErrorNegocio(r.error.issues[0].message);
+  return r.data;
+}
+
+const reasignarSchema = z.object({
+  ticketIds: z.array(z.number().int().positive()).min(1, "Seleccione al menos un ticket.").max(50, "Seleccione máximo 50 tickets a la vez."),
+  tecnicoId: z.number({ message: "Seleccione un técnico." }).int().positive("Seleccione un técnico."),
+  comentario: z.string().trim().max(500).default(""),
+});
+
+const prioridadSchema = z.object({
+  prioridad: z.enum(["baja", "normal", "alta"], { message: "Seleccione una prioridad válida." }),
+  comentario: z.string().trim().max(500).default(""),
+});
+
+router.get("/dashboard", async (req, res) => {
+  const dias = [7, 30, 90].includes(Number(req.query.dias)) ? Number(req.query.dias) : 30;
+  res.json(await panelGestion(dias));
+});
+
+router.post("/reasignar", async (req, res) => {
+  const d = validar(reasignarSchema, req.body);
+  const reasignados = await reasignarTickets(req.usuario!, d.ticketIds, d.tecnicoId, d.comentario);
+  res.json({ reasignados });
+});
+
+router.patch("/tickets/:id/prioridad", async (req, res) => {
+  const d = validar(prioridadSchema, req.body);
+  await cambiarPrioridad(req.usuario!, Number(req.params.id), d.prioridad, d.comentario);
+  res.json({ ok: true });
 });
 
 router.get("/tickets", async (req, res) => {

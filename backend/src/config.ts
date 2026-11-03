@@ -11,4 +11,6 @@ export const config = {
   maxUploadMb: Number(process.env.MAX_UPLOAD_MB ?? 100),
   ticketCooldownSeg: Number(process.env.TICKET_COOLDOWN_SEG ?? 30),
   ticketsPorHora: Number(process.env.TICKETS_POR_HORA ?? 10),
+  capacidadBalanceado: Number(process.env.CAPACIDAD_BALANCEADO ?? 6),
+  capacidadSaturado: Number(process.env.CAPACIDAD_SATURADO ?? 12),
 };

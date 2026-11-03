@@ -38,6 +38,9 @@ export const ETIQUETAS_ETAPA: Record<string, string> = {
 export const ETIQUETAS_EVENTO: Record<string, string> = {
   creacion: "Ticket creado",
   asignacion_automatica: "Asignación automática",
+  asignacion_manual: "Asignación por coordinación",
+  reasignacion: "Reasignación",
+  cambio_prioridad: "Cambio de prioridad",
   cambio_estado: "Cambio de estado",
   troubleshooting_agregado: "Paso de troubleshooting registrado",
   espera_iniciada: "Información solicitada al reportante",
