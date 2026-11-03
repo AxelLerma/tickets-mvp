@@ -4,9 +4,10 @@ import { useState } from "react";
 import { api, useAccion } from "@/lib/api";
 import { duracion, fechaHora } from "@/lib/formato";
 import type { DatosTecnico, Detalle } from "@/lib/tipos";
-import { Cronometro } from "./Cronometro";
+import { formatoReloj, useTemporizador } from "./Cronometro";
 
-const MIN_ENCONTRO = 100;
+// Debe coincidir con MIN_COMO_SE_ENCONTRO del backend (core/estados.ts).
+const MIN_ENCONTRO = 30;
 const TIEMPOS_RAPIDOS = [15, 30, 45, 60, 90, 120];
 
 function Dato({ titulo, texto }: { titulo: string; texto: string | null }) {
@@ -15,6 +16,100 @@ function Dato({ titulo, texto }: { titulo: string; texto: string | null }) {
     <div>
       <h3 className="text-sm font-semibold">{titulo}</h3>
       <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed">{texto}</p>
+    </div>
+  );
+}
+
+function FormularioPaso({
+  ticketId,
+  ocupado,
+  ejecutar,
+}: {
+  ticketId: number;
+  ocupado: boolean;
+  ejecutar: (accion: () => Promise<unknown>) => Promise<void>;
+}) {
+  const { segundos, minutos, reiniciar } = useTemporizador(`paso-inicio-${ticketId}`);
+  const [descripcion, setDescripcion] = useState("");
+  const [resultado, setResultado] = useState("");
+  const [manual, setManual] = useState("");
+
+  const minutosFinales = manual ? Number(manual) : Math.min(minutos, 1440);
+
+  return (
+    <div className="space-y-3 border-2 border-borde bg-white p-4">
+      <p className="text-sm font-medium">Registrar paso</p>
+      <textarea
+        value={descripcion}
+        onChange={(e) => setDescripcion(e.target.value)}
+        rows={2}
+        placeholder="Qué se hizo"
+        className="entrada"
+      />
+      <textarea
+        value={resultado}
+        onChange={(e) => setResultado(e.target.value)}
+        rows={2}
+        placeholder="Resultado obtenido"
+        className="entrada"
+      />
+
+      <div className="border border-borde bg-superficie p-3">
+        <p className="text-xs text-suave">Tiempo medido automáticamente</p>
+        <p className="font-mono text-2xl tabular-nums">{formatoReloj(segundos)}</p>
+        <p className="mt-1 text-xs text-suave">
+          Se registrará como <strong>{duracion(minutosFinales)}</strong>
+          {manual ? " (ajustado por usted)" : ""}. Si trabajó más o menos tiempo, ajústelo:
+        </p>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          {TIEMPOS_RAPIDOS.map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => setManual(String(m))}
+              className={`cursor-pointer border px-3 py-2 text-sm ${
+                manual === String(m) ? "border-institucional bg-lavanda font-medium" : "border-borde bg-white"
+              }`}
+            >
+              {duracion(m)}
+            </button>
+          ))}
+          <input
+            type="number"
+            min={1}
+            max={1440}
+            value={manual}
+            onChange={(e) => setManual(e.target.value)}
+            placeholder="Minutos"
+            aria-label="Ajustar minutos"
+            className="entrada w-28"
+          />
+          {manual && (
+            <button type="button" onClick={() => setManual("")} className="cursor-pointer text-sm text-institucional underline">
+              Usar tiempo automático
+            </button>
+          )}
+        </div>
+      </div>
+
+      <button
+        disabled={ocupado}
+        onClick={() =>
+          ejecutar(async () => {
+            await api(`/tickets/${ticketId}/pasos`, {
+              method: "POST",
+              body: JSON.stringify({ descripcion, resultado, minutos: minutosFinales }),
+            });
+            setDescripcion("");
+            setResultado("");
+            setManual("");
+            reiniciar();
+          })
+        }
+        className="boton"
+      >
+        Guardar paso
+      </button>
     </div>
   );
 }
@@ -28,7 +123,6 @@ export function PanelTecnico({ detalle, tecnico, recargar }: { detalle: Detalle;
   const [queSeHizo, setQueSeHizo] = useState(intervencion.queSeHizo ?? "");
   const [comoSeDejo, setComoSeDejo] = useState(intervencion.comoSeDejo ?? "");
   const [materiales, setMateriales] = useState(intervencion.materiales ?? "");
-  const [paso, setPaso] = useState({ descripcion: "", resultado: "", minutos: "" });
   const [motivo, setMotivo] = useState("");
 
   const base = `/tickets/${ticket.id}`;
@@ -64,7 +158,7 @@ export function PanelTecnico({ detalle, tecnico, recargar }: { detalle: Detalle;
               placeholder="Describa la condición inicial del equipo o servicio al llegar."
               className="entrada"
             />
-            <p className={`text-xs ${encontroValido ? "text-emerald-700" : "text-suave"}`}>
+            <p className={`text-xs ${encontroValido ? "text-institucional" : "text-suave"}`}>
               {encontro.trim().length} de {MIN_ENCONTRO} caracteres mínimos
               {!hayEvidenciaInicial && " · Falta adjuntar una evidencia inicial (sección Evidencias)."}
             </p>
@@ -97,7 +191,7 @@ export function PanelTecnico({ detalle, tecnico, recargar }: { detalle: Detalle;
           </h3>
 
           {pasos.length > 0 && (
-            <ol className="divide-y divide-borde border border-borde">
+            <ol className="divide-y divide-borde border border-borde bg-white">
               {pasos.map((p) => (
                 <li key={p.id} className="px-3 py-3 text-sm">
                   <p className="text-xs text-suave">
@@ -110,65 +204,7 @@ export function PanelTecnico({ detalle, tecnico, recargar }: { detalle: Detalle;
             </ol>
           )}
 
-          {acciones.registrarTrabajo && (
-            <div className="space-y-3 border border-borde p-4">
-              <p className="text-sm font-medium">Registrar paso</p>
-              <textarea
-                value={paso.descripcion}
-                onChange={(e) => setPaso({ ...paso, descripcion: e.target.value })}
-                rows={2}
-                placeholder="Qué se hizo"
-                className="entrada"
-              />
-              <textarea
-                value={paso.resultado}
-                onChange={(e) => setPaso({ ...paso, resultado: e.target.value })}
-                rows={2}
-                placeholder="Resultado obtenido"
-                className="entrada"
-              />
-              <Cronometro alDetener={(m) => setPaso((p) => ({ ...p, minutos: String(m) }))} />
-              <div className="flex flex-wrap items-center gap-2">
-                {TIEMPOS_RAPIDOS.map((m) => (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => setPaso({ ...paso, minutos: String(m) })}
-                    className={`cursor-pointer rounded-sm border px-3 py-2 text-sm ${
-                      paso.minutos === String(m) ? "border-institucional bg-fondo font-medium" : "border-borde"
-                    }`}
-                  >
-                    {duracion(m)}
-                  </button>
-                ))}
-                <input
-                  type="number"
-                  min={1}
-                  max={1440}
-                  value={paso.minutos}
-                  onChange={(e) => setPaso({ ...paso, minutos: e.target.value })}
-                  placeholder="Minutos"
-                  aria-label="Minutos dedicados"
-                  className="entrada w-28"
-                />
-              </div>
-              <button
-                disabled={ocupado}
-                onClick={() =>
-                  ejecutar(async () => {
-                    await api(`${base}/pasos`, {
-                      method: "POST",
-                      body: JSON.stringify({ descripcion: paso.descripcion, resultado: paso.resultado, minutos: Number(paso.minutos) }),
-                    });
-                    setPaso({ descripcion: "", resultado: "", minutos: "" });
-                  })
-                }
-                className="boton"
-              >
-                Guardar paso
-              </button>
-            </div>
-          )}
+          {acciones.registrarTrabajo && <FormularioPaso ticketId={ticket.id} ocupado={ocupado} ejecutar={ejecutar} />}
         </div>
       )}
 
@@ -235,9 +271,9 @@ export function PanelTecnico({ detalle, tecnico, recargar }: { detalle: Detalle;
             <input id="mat" value={materiales} onChange={(e) => setMateriales(e.target.value)} maxLength={1000} className="entrada" />
           </div>
 
-          <ul className="space-y-1 border border-borde p-3 text-sm">
+          <ul className="space-y-1 border-2 border-borde bg-white p-3 text-sm">
             {controles.map(([nombre, ok]) => (
-              <li key={nombre} className={ok ? "text-emerald-700" : "text-suave"}>
+              <li key={nombre} className={ok ? "font-medium text-institucional" : "text-suave"}>
                 {ok ? "✓" : "○"} {nombre}
               </li>
             ))}

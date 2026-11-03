@@ -27,23 +27,25 @@ app.use("/api/evidencias", evidenciasRoutes);
 app.use("/api/tecnico", tecnicoRoutes);
 app.use("/api/manager", managerRoutes);
 
-// Siempre después de todas las rutas
 app.use((_req, res) => {
   res.status(404).json({ error: "Ruta no encontrada." });
 });
 
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   if (err instanceof ErrorNegocio) {
-    return res.status(err.estado).json({ error: err.message });
+    res.status(err.estado).json({ error: err.message });
+    return;
   }
-  if ((err as { code?: string }).code === "SQLITE_CONSTRAINT_UNIQUE") {
-    return res.status(409).json({ error: "Ya existe un registro con ese nombre o correo." });
+  if ((err as { code?: string }).code === "23505") {
+    res.status(409).json({ error: "Ya existe un registro con ese nombre o correo." });
+    return;
   }
   if (err instanceof multer.MulterError) {
     const demasiadoGrande = err.code === "LIMIT_FILE_SIZE";
-    return res
+    res
       .status(demasiadoGrande ? 413 : 400)
       .json({ error: demasiadoGrande ? `El archivo excede el límite de ${config.maxUploadMb} MB.` : "No fue posible recibir el archivo." });
+    return;
   }
   console.error(err);
   res.status(500).json({ error: "Error interno del servidor." });

@@ -29,14 +29,21 @@ export default function Login() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center px-4">
-      <div className="w-full max-w-sm">
-        <div className="mb-6 text-center">
-          <p className="text-xs uppercase tracking-widest text-suave">Instituto Electoral del Estado de Querétaro</p>
-          <h1 className="mt-2 text-xl font-semibold tracking-tight">Sistema interno de soporte</h1>
+    <main className="grid min-h-screen lg:grid-cols-[1.15fr_1fr]">
+      <section className="flex flex-col justify-between bg-linear-to-br from-ciruela via-[#7b3a96] to-institucional-oscuro px-8 py-10 text-white">
+        <p className="text-xs uppercase tracking-[0.25em] text-white/70">Instituto Electoral del Estado de Querétaro</p>
+        <div className="py-12">
+          <h1 className="text-3xl font-semibold leading-tight lg:text-4xl">Sistema interno de soporte y atención de tickets</h1>
+          <p className="mt-4 max-w-md text-sm text-white/80">
+            Reporte de incidencias, atención técnica con evidencia y seguimiento de la operación en un solo lugar.
+          </p>
         </div>
+        <div className="h-1.5 w-24 bg-rosa" />
+      </section>
 
-        <form onSubmit={enviar} className="panel space-y-5 p-6">
+      <section className="flex items-center justify-center bg-fondo px-6 py-10">
+        <form onSubmit={enviar} className="panel w-full max-w-sm space-y-5 p-7">
+          <h2 className="text-lg font-semibold text-ciruela">Iniciar sesión</h2>
           {error && <div className="alerta-error">{error}</div>}
           <div>
             <label htmlFor="correo" className="etiqueta">
@@ -51,10 +58,10 @@ export default function Login() {
             <input id="password" name="password" type="password" autoComplete="current-password" required className="entrada" />
           </div>
           <button type="submit" disabled={enviando} className="boton w-full">
-            {enviando ? "Verificando…" : "Iniciar sesión"}
+            {enviando ? "Verificando…" : "Entrar"}
           </button>
         </form>
-      </div>
+      </section>
     </main>
   );
 }

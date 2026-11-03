@@ -1,25 +1,25 @@
 @import "tailwindcss";
 
 @theme {
-  --color-fondo: #e9e1f3;
-  --color-superficie: #f8f4fc;
-  --color-borde: #cbbde0;
+  --color-white: #f1e8fb;
+  --color-fondo: #ddd0ef;
+  --color-superficie: #e9defa;
+  --color-borde: #b49bd4;
   --color-tinta: #231830;
-  --color-suave: #66587a;
+  --color-suave: #5d4d73;
   --color-institucional: #0e5e66;
   --color-institucional-oscuro: #0a454b;
   --color-ciruela: #4b2377;
   --color-rosa: #b83c82;
   --color-rosa-claro: #f7dcea;
   --color-aqua-claro: #d2eaeb;
-  --color-lavanda: #ddd0ee;
+  --color-lavanda: #cdb8e8;
   --color-error: #a3123f;
   --font-sans: "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
 body {
-  @apply text-tinta antialiased;
-  background: linear-gradient(180deg, #e4daf0 0%, #ece5f5 45%, #f4e5ee 100%) fixed;
+  @apply bg-fondo text-tinta antialiased;
 }
 
 @layer components {
@@ -27,21 +27,21 @@ body {
     @apply mb-6 text-xl font-semibold tracking-tight text-ciruela;
   }
   .panel {
-    @apply rounded-md border border-borde bg-superficie shadow-sm;
+    @apply rounded-sm border-2 border-borde bg-superficie shadow-[3px_3px_0_rgba(75,35,119,0.18)];
   }
   .etiqueta {
     @apply mb-1 block text-sm font-medium text-ciruela;
   }
   .entrada {
-    @apply w-full rounded-md border border-borde bg-white px-3 py-3 text-base outline-none focus:border-institucional focus:ring-1 focus:ring-institucional;
+    @apply w-full rounded-sm border border-borde bg-white px-3 py-3 text-base outline-none focus:border-institucional focus:ring-1 focus:ring-institucional;
   }
   .boton {
-    @apply inline-flex min-h-12 cursor-pointer items-center justify-center rounded-md bg-institucional px-5 text-sm font-medium text-white hover:bg-institucional-oscuro disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex min-h-12 cursor-pointer items-center justify-center rounded-sm bg-institucional px-5 text-sm font-medium text-white hover:bg-institucional-oscuro disabled:cursor-not-allowed disabled:opacity-50;
   }
   .boton-secundario {
-    @apply inline-flex min-h-12 cursor-pointer items-center justify-center rounded-md border border-ciruela/40 bg-superficie px-5 text-sm font-medium text-ciruela hover:bg-lavanda disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex min-h-12 cursor-pointer items-center justify-center rounded-sm border border-ciruela/50 bg-white px-5 text-sm font-medium text-ciruela hover:bg-lavanda disabled:cursor-not-allowed disabled:opacity-50;
   }
   .alerta-error {
-    @apply rounded-md border border-error/30 bg-rosa-claro px-4 py-3 text-sm text-error;
+    @apply rounded-sm border border-error/40 bg-rosa-claro px-4 py-3 text-sm text-error;
   }
 }

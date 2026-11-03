@@ -1,7 +1,8 @@
 import bcrypt from "bcryptjs";
 import { Router } from "express";
 import { z } from "zod";
-import { db } from "../db/connection";
+import { ErrorNegocio } from "../core/errores";
+import { uno } from "../db/connection";
 import { autenticar, emitirSesion } from "../middleware/auth";
 
 const router = Router();
@@ -11,27 +12,20 @@ const loginSchema = z.object({
   password: z.string().min(1, "Escriba su contraseña."),
 });
 
-router.post("/login", (req, res) => {
+router.post("/login", async (req, res) => {
   const datos = loginSchema.safeParse(req.body);
-  if (!datos.success) {
-    return res.status(400).json({ error: datos.error.issues[0].message });
+  if (!datos.success) throw new ErrorNegocio(datos.error.issues[0].message);
+
+  const usuario = await uno<{ id: number; nombre: string; correo: string; rol: string; passwordHash: string; sesionVersion: number }>(
+    "SELECT id, nombre, correo, rol, password_hash, sesion_version FROM usuarios WHERE correo = ? AND activo = TRUE",
+    [datos.data.correo],
+  );
+
+  if (!usuario || !(await bcrypt.compare(datos.data.password, usuario.passwordHash))) {
+    throw new ErrorNegocio("Correo o contraseña incorrectos.", 401);
   }
 
-  const usuario = db
-    .prepare(
-      `SELECT id, nombre, correo, rol, password_hash AS hash, sesion_version AS version
-         FROM usuarios WHERE correo = ? AND activo = 1`,
-    )
-    .get(datos.data.correo) as
-    | { id: number; nombre: string; correo: string; rol: string; hash: string; version: number }
-    | undefined;
-
-  // Mismo mensaje para correo inexistente y contraseña incorrecta
-  if (!usuario || !bcrypt.compareSync(datos.data.password, usuario.hash)) {
-    return res.status(401).json({ error: "Correo o contraseña incorrectos." });
-  }
-
-  emitirSesion(res, usuario.id, usuario.version);
+  emitirSesion(res, usuario.id, usuario.sesionVersion);
   res.json({ usuario: { id: usuario.id, nombre: usuario.nombre, correo: usuario.correo, rol: usuario.rol } });
 });
 

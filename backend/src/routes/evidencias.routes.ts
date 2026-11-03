@@ -10,7 +10,6 @@ import { DIR_TMP, guardarEvidencia, localizarEvidencia } from "../services/evide
 const router = Router();
 router.use(autenticar);
 
-// El archivo llega primero a una carpeta temporal; el servicio lo valida y lo mueve.
 const subida = multer({ dest: DIR_TMP, limits: { fileSize: config.maxUploadMb * 1024 * 1024, files: 1 } });
 
 const campos = z.object({
@@ -19,23 +18,19 @@ const campos = z.object({
   reemplazaId: z.coerce.number().int().positive().optional(),
 });
 
-router.post("/", requiereRol("reportante", "tecnico"), subida.single("archivo"), async (req, res, next) => {
-  try {
-    if (!req.file) throw new ErrorNegocio("Seleccione un archivo.");
-    const datos = campos.safeParse(req.body);
-    if (!datos.success) {
-      await rm(req.file.path, { force: true });
-      throw new ErrorNegocio("Los datos de la evidencia no son válidos.");
-    }
-    const id = await guardarEvidencia(req.usuario!, { ...datos.data, archivo: req.file });
-    res.status(201).json({ id });
-  } catch (error) {
-    next(error);
+router.post("/", requiereRol("reportante", "tecnico"), subida.single("archivo"), async (req, res) => {
+  if (!req.file) throw new ErrorNegocio("Seleccione un archivo.");
+  const datos = campos.safeParse(req.body);
+  if (!datos.success) {
+    await rm(req.file.path, { force: true });
+    throw new ErrorNegocio("Los datos de la evidencia no son válidos.");
   }
+  const id = await guardarEvidencia(req.usuario!, { ...datos.data, archivo: req.file });
+  res.status(201).json({ id });
 });
 
-function enviar(req: Request, res: Response, miniatura: boolean) {
-  const ev = localizarEvidencia(req.usuario!, Number(req.params.id), miniatura);
+async function enviar(req: Request, res: Response, miniatura: boolean) {
+  const ev = await localizarEvidencia(req.usuario!, Number(req.params.id), miniatura);
   res.setHeader("Content-Type", ev.mime);
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("Cache-Control", "private, max-age=300");

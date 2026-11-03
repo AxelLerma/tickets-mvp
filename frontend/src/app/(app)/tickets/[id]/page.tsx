@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { useEffect, useRef } from "react";
 import { AccionesTicket } from "@/components/AccionesTicket";
 import { Comentarios } from "@/components/Comentarios";
 import { Evidencias } from "@/components/Evidencias";
@@ -18,6 +19,18 @@ export default function PaginaTicket() {
   const { id } = useParams<{ id: string }>();
   const { usuario } = useSesion();
   const { datos, error, cargando, recargar } = useApi<Detalle>(`/tickets/${id}`);
+
+  // Mientras la pantalla está visible, se actualiza sola cada 15 segundos (mensajes y estado nuevos).
+  const recargarRef = useRef(recargar);
+  useEffect(() => {
+    recargarRef.current = recargar;
+  });
+  useEffect(() => {
+    const intervalo = setInterval(() => {
+      if (document.visibilityState === "visible") recargarRef.current();
+    }, 15000);
+    return () => clearInterval(intervalo);
+  }, []);
 
   return (
     <>

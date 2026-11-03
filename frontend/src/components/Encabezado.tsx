@@ -11,7 +11,10 @@ const ENLACES: Record<Rol, { href: string; texto: string }[]> = {
     { href: "/reportante/nuevo", texto: "Reportar problema" },
   ],
   tecnico: [{ href: "/tecnico", texto: "Mi cola de trabajo" }],
-  manager: [{ href: "/manager", texto: "Panel operativo" }],
+  manager: [
+    { href: "/manager", texto: "Panel operativo" },
+    { href: "/manager/historial", texto: "Historial" },
+  ],
   admin: [
     { href: "/admin", texto: "Usuarios" },
     { href: "/admin/catalogos", texto: "Catálogos" },
@@ -31,7 +34,7 @@ export function Encabezado() {
 
   return (
     <header>
-      <div className="bg-linear-to-r from-ciruela via-[#7b3a96] to-institucional-oscuro">
+      <div className="bg-ciruela">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-2 px-4 py-3 text-white">
           <div>
             <p className="text-sm font-semibold tracking-wide">Instituto Electoral del Estado de Querétaro</p>
@@ -47,15 +50,15 @@ export function Encabezado() {
           </div>
         </div>
       </div>
-      <div className="h-1 bg-linear-to-r from-rosa via-[#d46aa5] to-[#6fb9bf]" />
-      <nav className="border-b border-borde bg-lavanda/70">
+      <div className="h-1.5 bg-rosa" />
+      <nav className="border-b-2 border-borde bg-lavanda">
         <div className="mx-auto flex max-w-5xl gap-6 px-4">
           {ENLACES[usuario.rol].map((e) => (
             <Link
               key={e.href}
               href={e.href}
-              className={`border-b-2 py-3 text-sm ${
-                ruta === e.href ? "border-rosa font-medium text-ciruela" : "border-transparent text-suave hover:text-tinta"
+              className={`border-b-4 py-3 text-sm ${
+                ruta === e.href ? "border-institucional font-semibold text-ciruela" : "border-transparent text-suave hover:text-tinta"
               }`}
             >
               {e.texto}

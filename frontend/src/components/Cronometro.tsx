@@ -1,43 +1,54 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
-/** Mide el tiempo del paso en curso y entrega los minutos al detenerse. */
-export function Cronometro({ alDetener }: { alDetener: (minutos: number) => void }) {
+/**
+ * Temporizador automático del paso en curso. Arranca solo al abrir el formulario
+ * y recuerda su inicio aunque se recargue la página.
+ */
+export function useTemporizador(clave: string) {
   const [inicio, setInicio] = useState<number | null>(null);
-  const [segundos, setSegundos] = useState(0);
+  const [ahora, setAhora] = useState(0);
 
   useEffect(() => {
-    if (inicio === null) return;
-    const id = setInterval(() => setSegundos(Math.floor((Date.now() - inicio) / 1000)), 1000);
+    let guardado: number | null = null;
+    try {
+      const valor = localStorage.getItem(clave);
+      guardado = valor ? Number(valor) : null;
+    } catch {
+      // sin almacenamiento local el reloj arranca desde cero
+    }
+    const arranque = guardado && !Number.isNaN(guardado) ? guardado : Date.now();
+    try {
+      localStorage.setItem(clave, String(arranque));
+    } catch {
+      // se ignora
+    }
+    setInicio(arranque);
+    setAhora(Date.now());
+    const id = setInterval(() => setAhora(Date.now()), 1000);
     return () => clearInterval(id);
-  }, [inicio]);
+  }, [clave]);
 
-  function detener() {
-    if (inicio === null) return;
-    const total = Math.floor((Date.now() - inicio) / 1000);
-    setInicio(null);
-    setSegundos(0);
-    alDetener(Math.max(1, Math.round(total / 60)));
-  }
+  const reiniciar = useCallback(() => {
+    const t = Date.now();
+    try {
+      localStorage.setItem(clave, String(t));
+    } catch {
+      // se ignora
+    }
+    setInicio(t);
+    setAhora(t);
+  }, [clave]);
 
-  const mm = String(Math.floor(segundos / 60)).padStart(2, "0");
-  const ss = String(segundos % 60).padStart(2, "0");
+  const segundos = inicio ? Math.max(0, Math.floor((ahora - inicio) / 1000)) : 0;
+  return { segundos, minutos: Math.max(1, Math.round(segundos / 60)), reiniciar };
+}
 
-  return (
-    <div className="flex items-center gap-3">
-      <span className="w-16 font-mono text-lg tabular-nums">
-        {mm}:{ss}
-      </span>
-      {inicio === null ? (
-        <button type="button" onClick={() => setInicio(Date.now())} className="boton-secundario">
-          Iniciar cronómetro
-        </button>
-      ) : (
-        <button type="button" onClick={detener} className="boton">
-          Detener y usar tiempo
-        </button>
-      )}
-    </div>
-  );
+export function formatoReloj(segundos: number): string {
+  const h = Math.floor(segundos / 3600);
+  const m = Math.floor((segundos % 3600) / 60);
+  const s = segundos % 60;
+  const dos = (n: number) => String(n).padStart(2, "0");
+  return h > 0 ? `${h}:${dos(m)}:${dos(s)}` : `${dos(m)}:${dos(s)}`;
 }

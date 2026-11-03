@@ -19,7 +19,6 @@ import { crearTicket, listarDelReportante } from "../services/ticket.service";
 const router = Router();
 router.use(autenticar);
 
-/** Valida el cuerpo y, si falla, responde con el primer mensaje en español. */
 function validar<T extends z.ZodType>(esquema: T, cuerpo: unknown): z.infer<T> {
   const r = esquema.safeParse(cuerpo);
   if (!r.success) throw new ErrorNegocio(r.error.issues[0].message);
@@ -57,62 +56,61 @@ const cierreSchema = z.object({
 const motivoSchema = z.object({ motivo: z.string().trim().min(5, "Escriba el motivo (mínimo 5 caracteres).").max(1000) });
 const comentarioSchema = z.object({ texto: z.string().trim().min(1, "Escriba un comentario.").max(2000) });
 
-router.post("/", requiereRol("reportante"), (req, res) => {
-  const ticket = crearTicket(req.usuario!.id, validar(nuevoTicketSchema, req.body));
+router.post("/", requiereRol("reportante"), async (req, res) => {
+  const ticket = await crearTicket(req.usuario!.id, validar(nuevoTicketSchema, req.body));
   res.status(201).json({ ticket });
 });
 
-// Debe ir antes de "/:id" para que "mios" no se interprete como un id
-router.get("/mios", requiereRol("reportante"), (req, res) => {
-  res.json({ tickets: listarDelReportante(req.usuario!.id) });
+router.get("/mios", requiereRol("reportante"), async (req, res) => {
+  res.json({ tickets: await listarDelReportante(req.usuario!.id) });
 });
 
-router.get("/:id", (req, res) => {
-  res.json(obtenerDetalle(req.usuario!, idDe(req)));
+router.get("/:id", async (req, res) => {
+  res.json(await obtenerDetalle(req.usuario!, idDe(req)));
 });
 
-router.post("/:id/iniciar", requiereRol("tecnico"), (req, res) => {
-  iniciarAtencion(req.usuario!, idDe(req), validar(iniciarSchema, req.body).comoSeEncontro);
+router.post("/:id/iniciar", requiereRol("tecnico"), async (req, res) => {
+  await iniciarAtencion(req.usuario!, idDe(req), validar(iniciarSchema, req.body).comoSeEncontro);
   res.json({ ok: true });
 });
 
-router.post("/:id/pasos", requiereRol("tecnico"), (req, res) => {
-  registrarPaso(req.usuario!, idDe(req), validar(pasoSchema, req.body));
+router.post("/:id/pasos", requiereRol("tecnico"), async (req, res) => {
+  await registrarPaso(req.usuario!, idDe(req), validar(pasoSchema, req.body));
   res.status(201).json({ ok: true });
 });
 
-router.post("/:id/espera", requiereRol("tecnico"), (req, res) => {
-  solicitarInformacion(req.usuario!, idDe(req), validar(esperaSchema, req.body).motivo);
+router.post("/:id/espera", requiereRol("tecnico"), async (req, res) => {
+  await solicitarInformacion(req.usuario!, idDe(req), validar(esperaSchema, req.body).motivo);
   res.json({ ok: true });
 });
 
-router.post("/:id/espera/terminar", requiereRol("tecnico"), (req, res) => {
-  reanudarAtencion(req.usuario!, idDe(req));
+router.post("/:id/espera/terminar", requiereRol("tecnico"), async (req, res) => {
+  await reanudarAtencion(req.usuario!, idDe(req));
   res.json({ ok: true });
 });
 
-router.put("/:id/cierre", requiereRol("tecnico"), (req, res) => {
-  guardarDatosCierre(req.usuario!, idDe(req), validar(cierreSchema, req.body));
+router.put("/:id/cierre", requiereRol("tecnico"), async (req, res) => {
+  await guardarDatosCierre(req.usuario!, idDe(req), validar(cierreSchema, req.body));
   res.json({ ok: true });
 });
 
-router.post("/:id/cerrar", requiereRol("tecnico"), (req, res) => {
-  cerrarTicket(req.usuario!, idDe(req));
+router.post("/:id/cerrar", requiereRol("tecnico"), async (req, res) => {
+  await cerrarTicket(req.usuario!, idDe(req));
   res.json({ ok: true });
 });
 
-router.post("/:id/reabrir", requiereRol("reportante", "manager"), (req, res) => {
-  reabrirTicket(req.usuario!, idDe(req), validar(motivoSchema, req.body).motivo);
+router.post("/:id/reabrir", requiereRol("reportante", "manager"), async (req, res) => {
+  await reabrirTicket(req.usuario!, idDe(req), validar(motivoSchema, req.body).motivo);
   res.json({ ok: true });
 });
 
-router.post("/:id/cancelar", requiereRol("manager"), (req, res) => {
-  cancelarTicket(req.usuario!, idDe(req), validar(motivoSchema, req.body).motivo);
+router.post("/:id/cancelar", requiereRol("manager"), async (req, res) => {
+  await cancelarTicket(req.usuario!, idDe(req), validar(motivoSchema, req.body).motivo);
   res.json({ ok: true });
 });
 
-router.post("/:id/comentarios", requiereRol("reportante", "tecnico", "manager"), (req, res) => {
-  comentar(req.usuario!, idDe(req), validar(comentarioSchema, req.body).texto);
+router.post("/:id/comentarios", requiereRol("reportante", "tecnico", "manager"), async (req, res) => {
+  await comentar(req.usuario!, idDe(req), validar(comentarioSchema, req.body).texto);
   res.status(201).json({ ok: true });
 });
 

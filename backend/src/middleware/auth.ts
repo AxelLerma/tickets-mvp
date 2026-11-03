@@ -1,7 +1,8 @@
 import type { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import { config } from "../config";
-import { db } from "../db/connection";
+import { ErrorNegocio } from "../core/errores";
+import { uno } from "../db/connection";
 
 export type Rol = "reportante" | "tecnico" | "manager" | "admin";
 
@@ -21,7 +22,6 @@ declare global {
   }
 }
 
-/** Crea la cookie de sesión. La versión permite invalidar sesiones al cambiar contraseña o rol. */
 export function emitirSesion(res: Response, id: number, version: number): void {
   const token = jwt.sign({ id, v: version }, config.jwtSecret, { expiresIn: "8h" });
   res.cookie("token", token, {
@@ -32,35 +32,35 @@ export function emitirSesion(res: Response, id: number, version: number): void {
   });
 }
 
-export function autenticar(req: Request, res: Response, next: NextFunction) {
+export async function autenticar(req: Request, _res: Response, next: NextFunction): Promise<void> {
   const token = req.cookies?.token;
-  if (!token) {
-    return res.status(401).json({ error: "Inicie sesión para continuar." });
-  }
+  if (!token) throw new ErrorNegocio("Inicie sesión para continuar.", 401);
+
+  let carga: { id: number; v?: number };
   try {
-    const { id, v } = jwt.verify(token, config.jwtSecret) as { id: number; v?: number };
-    // Se consulta la base en cada petición: si desactivan al usuario o cambian su acceso, pierde la sesión de inmediato.
-    const fila = db
-      .prepare(
-        `SELECT id, nombre, correo, rol, region_id AS regionId, sesion_version AS version
-           FROM usuarios WHERE id = ? AND activo = 1`,
-      )
-      .get(id) as (UsuarioSesion & { version: number }) | undefined;
-    if (!fila || fila.version !== v) {
-      return res.status(401).json({ error: "Su sesión ya no es válida. Inicie sesión de nuevo." });
-    }
-    const { version: _version, ...usuario } = fila;
-    req.usuario = usuario;
-    next();
+    carga = jwt.verify(token, config.jwtSecret) as { id: number; v?: number };
   } catch {
-    return res.status(401).json({ error: "Su sesión expiró. Inicie sesión de nuevo." });
+    throw new ErrorNegocio("Su sesión expiró. Inicie sesión de nuevo.", 401);
   }
+
+  const fila = await uno<UsuarioSesion & { sesionVersion: number }>(
+    `SELECT id, nombre, correo, rol, region_id, sesion_version
+       FROM usuarios WHERE id = ? AND activo = TRUE`,
+    [carga.id],
+  );
+  if (!fila || fila.sesionVersion !== carga.v) {
+    throw new ErrorNegocio("Su sesión ya no es válida. Inicie sesión de nuevo.", 401);
+  }
+
+  const { sesionVersion: _version, ...usuario } = fila;
+  req.usuario = usuario;
+  next();
 }
 
 export function requiereRol(...roles: Rol[]) {
-  return (req: Request, res: Response, next: NextFunction) => {
+  return (req: Request, _res: Response, next: NextFunction): void => {
     if (!req.usuario || !roles.includes(req.usuario.rol)) {
-      return res.status(403).json({ error: "No tiene permiso para esta acción." });
+      throw new ErrorNegocio("No tiene permiso para esta acción.", 403);
     }
     next();
   };

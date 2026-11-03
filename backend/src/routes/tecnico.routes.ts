@@ -4,8 +4,8 @@ import { listarColaTecnico } from "../services/ticket.service";
 
 const router = Router();
 
-router.get("/cola", autenticar, requiereRol("tecnico"), (req, res) => {
-  res.json({ tickets: listarColaTecnico(req.usuario!.id) });
+router.get("/cola", autenticar, requiereRol("tecnico"), async (req, res) => {
+  res.json({ tickets: await listarColaTecnico(req.usuario!.id) });
 });
 
 export default router;
