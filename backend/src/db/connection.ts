@@ -66,9 +66,13 @@ export async function transaccion<T>(trabajo: () => Promise<T>): Promise<T> {
   }
 }
 
+const ARCHIVOS_ESQUEMA = ["schema.sql", "schema_notificaciones.sql"];
+
 export async function iniciarEsquema(): Promise<void> {
-  const sql = readFileSync(new URL("./schema.sql", import.meta.url), "utf8");
-  await pool.query(sql);
+  for (const archivo of ARCHIVOS_ESQUEMA) {
+    const sql = readFileSync(new URL(`./${archivo}`, import.meta.url), "utf8");
+    await pool.query(sql);
+  }
 }
 
 export async function cerrarConexion(): Promise<void> {

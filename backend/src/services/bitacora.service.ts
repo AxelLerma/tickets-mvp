@@ -1,4 +1,5 @@
 import { ejecutar } from "../db/connection";
+import { notificarEvento } from "./notificacion.service";
 
 interface EventoAuditoria {
   usuarioId: number | null;
@@ -26,4 +27,5 @@ export async function registrarEvento(e: EventoAuditoria): Promise<void> {
       e.comentario ?? null,
     ],
   );
+  if (e.entidad === "ticket") await notificarEvento(e);
 }

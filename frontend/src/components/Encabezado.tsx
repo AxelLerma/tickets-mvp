@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Campana } from "./Campana";
 import { useSesion } from "./SesionProvider";
 import type { Rol } from "@/lib/tipos";
 
@@ -14,6 +15,7 @@ const ENLACES: Record<Rol, { href: string; texto: string }[]> = {
   manager: [
     { href: "/manager", texto: "Panel operativo" },
     { href: "/manager/historial", texto: "Historial" },
+    { href: "/manager/reportes", texto: "Reportes" },
   ],
   admin: [
     { href: "/admin", texto: "Usuarios" },
@@ -40,7 +42,8 @@ export function Encabezado() {
             <p className="text-sm font-semibold tracking-wide">Instituto Electoral del Estado de Querétaro</p>
             <p className="text-xs text-white/70">Sistema interno de soporte y atención de tickets</p>
           </div>
-          <div className="flex items-center gap-4 text-xs">
+          <div className="flex items-center gap-3 text-xs">
+            {usuario.rol !== "admin" && <Campana />}
             <span className="text-white/85">
               {usuario.nombre} · {NOMBRE_ROL[usuario.rol]}
             </span>

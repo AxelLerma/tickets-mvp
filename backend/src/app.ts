@@ -9,6 +9,8 @@ import authRoutes from "./routes/auth.routes";
 import catalogosRoutes from "./routes/catalogos.routes";
 import evidenciasRoutes from "./routes/evidencias.routes";
 import managerRoutes from "./routes/manager.routes";
+import notificacionesRoutes from "./routes/notificaciones.routes";
+import reportesRoutes from "./routes/reportes.routes";
 import tecnicoRoutes from "./routes/tecnico.routes";
 import ticketsRoutes from "./routes/tickets.routes";
 
@@ -26,6 +28,8 @@ app.use("/api/tickets", ticketsRoutes);
 app.use("/api/evidencias", evidenciasRoutes);
 app.use("/api/tecnico", tecnicoRoutes);
 app.use("/api/manager", managerRoutes);
+app.use("/api/notificaciones", notificacionesRoutes);
+app.use("/api/reportes", reportesRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ error: "Ruta no encontrada." });
