@@ -7,9 +7,14 @@ export const metadata: Metadata = {
   description: "Plataforma interna de operaciones y tickets",
 };
 
+const SCRIPT_TEMA = `try{var t=localStorage.getItem("tema");if(t==="oscuro"||(t!=="claro"&&window.matchMedia("(prefers-color-scheme: dark)").matches)){document.documentElement.classList.add("oscuro")}}catch(e){}`;
+
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="es">
+    <html lang="es" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: SCRIPT_TEMA }} />
+      </head>
       <body>{children}</body>
     </html>
   );

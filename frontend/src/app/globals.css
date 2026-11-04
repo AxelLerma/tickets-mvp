@@ -45,3 +45,67 @@ body {
     @apply rounded-sm border border-error/40 bg-rosa-claro px-4 py-3 text-sm text-error;
   }
 }
+
+html.oscuro {
+  color-scheme: dark;
+  --color-fondo: #14121a;
+  --color-superficie: #1f1c27;
+  --color-borde: #3f3852;
+  --color-tinta: #ebe7f2;
+  --color-suave: #a59cb8;
+  --color-lavanda: #2a2336;
+  --color-rosa-claro: #3a1d2d;
+  --color-aqua-claro: #123b40;
+  --color-error: #ff7a9c;
+}
+
+html.oscuro .bg-white {
+  background-color: #2a2733;
+}
+html.oscuro .bg-\[\#ffffff\] {
+  background-color: #332e41;
+}
+html.oscuro .text-ciruela,
+html.oscuro .titulo-pagina,
+html.oscuro .etiqueta {
+  color: #cfb0f5;
+}
+html.oscuro .text-institucional {
+  color: #5fd0d9;
+}
+html.oscuro .text-institucional-oscuro {
+  color: #8fe3ea;
+}
+html.oscuro .text-rosa {
+  color: #f58cc2;
+}
+html.oscuro .border-ciruela {
+  border-color: #8f63c7;
+}
+html.oscuro .border-institucional {
+  border-color: #2fb0ba;
+}
+html.oscuro .text-\[\#6b3a9a\] {
+  color: #c9a6f0;
+}
+html.oscuro .text-\[\#b0206a\] {
+  color: #ff8fc0;
+}
+html.oscuro .entrada,
+html.oscuro .boton-secundario {
+  background-color: #2a2733;
+}
+html.oscuro .entrada:focus {
+  border-color: #2fb0ba;
+  --tw-ring-color: #2fb0ba;
+}
+html.oscuro .boton-secundario {
+  color: #cfb0f5;
+  border-color: #8f63c7;
+}
+html.oscuro .boton-secundario:hover {
+  background-color: var(--color-lavanda);
+}
+html.oscuro .panel {
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.45);
+}
