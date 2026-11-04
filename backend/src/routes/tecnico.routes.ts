@@ -1,11 +1,14 @@
 import { Router } from "express";
 import { autenticar, requiereRol } from "../middleware/auth";
-import { listarColaTecnico } from "../services/ticket.service";
+import { listarColaTecnico, listarGrupo } from "../services/ticket.service";
 
 const router = Router();
 
 router.get("/cola", autenticar, requiereRol("tecnico"), async (req, res) => {
-  res.json({ tickets: await listarColaTecnico(req.usuario!.id) });
+  const usuario = req.usuario!;
+  const tickets = await listarColaTecnico(usuario.id);
+  const grupo = usuario.grupoId != null ? await listarGrupo(usuario.id, usuario.grupoId) : [];
+  res.json({ tickets, grupo });
 });
 
 export default router;

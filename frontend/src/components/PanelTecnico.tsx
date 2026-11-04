@@ -1,12 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { api, useAccion } from "@/lib/api";
+import { api, useAccion, useApi } from "@/lib/api";
 import { duracion, fechaHora } from "@/lib/formato";
-import type { DatosTecnico, Detalle } from "@/lib/tipos";
+import type { Catalogos, DatosTecnico, Detalle } from "@/lib/tipos";
 import { formatoReloj, useTemporizador } from "./Cronometro";
 
-// Debe coincidir con MIN_COMO_SE_ENCONTRO del backend (core/estados.ts).
 const MIN_ENCONTRO = 30;
 const TIEMPOS_RAPIDOS = [15, 30, 45, 60, 90, 120];
 
@@ -118,12 +117,15 @@ export function PanelTecnico({ detalle, tecnico, recargar }: { detalle: Detalle;
   const { ticket, acciones, evidencias } = detalle;
   const { intervencion, pasos, esperas, cierre } = tecnico;
   const { error, ocupado, ejecutar } = useAccion(recargar);
+  const { datos: catalogos } = useApi<Catalogos>("/catalogos");
 
   const [encontro, setEncontro] = useState(intervencion.comoSeEncontro ?? "");
   const [queSeHizo, setQueSeHizo] = useState(intervencion.queSeHizo ?? "");
   const [comoSeDejo, setComoSeDejo] = useState(intervencion.comoSeDejo ?? "");
   const [materiales, setMateriales] = useState(intervencion.materiales ?? "");
-  const [motivo, setMotivo] = useState("");
+  const [motivoCierre, setMotivoCierre] = useState(intervencion.motivoCierreId ? String(intervencion.motivoCierreId) : "");
+  const [motivoEspera, setMotivoEspera] = useState("");
+  const [detalleEspera, setDetalleEspera] = useState("");
 
   const base = `/tickets/${ticket.id}`;
   const esperaAbierta = esperas.find((e) => !e.fin);
@@ -139,13 +141,13 @@ export function PanelTecnico({ detalle, tecnico, recargar }: { detalle: Detalle;
     ["Evidencia de cierre", cierre?.evidencia ?? false],
   ];
   const completo = controles.every(([, ok]) => ok);
+  const datosCierre = { queSeHizo, comoSeDejo, materiales, motivoCierreId: motivoCierre ? Number(motivoCierre) : null };
 
   return (
     <section className="panel space-y-8 p-5">
       <h2 className="text-sm font-semibold uppercase tracking-wide text-suave">Atención técnica</h2>
       {error && <div className="alerta-error">{error}</div>}
 
-      {/* 1. Inicio */}
       <div className="space-y-3">
         <h3 className="text-base font-semibold">1. Cómo se encontró</h3>
         {ticket.estado === "asignado" && acciones.iniciar ? (
@@ -182,7 +184,6 @@ export function PanelTecnico({ detalle, tecnico, recargar }: { detalle: Detalle;
         )}
       </div>
 
-      {/* 2. Troubleshooting */}
       {(pasos.length > 0 || acciones.registrarTrabajo) && (
         <div className="space-y-4">
           <h3 className="text-base font-semibold">
@@ -208,7 +209,6 @@ export function PanelTecnico({ detalle, tecnico, recargar }: { detalle: Detalle;
         </div>
       )}
 
-      {/* 3. Espera de información */}
       {(esperas.length > 0 || acciones.registrarTrabajo) && (
         <div className="space-y-3">
           <h3 className="text-base font-semibold">3. Espera de información</h3>
@@ -228,31 +228,43 @@ export function PanelTecnico({ detalle, tecnico, recargar }: { detalle: Detalle;
               </button>
             ) : (
               <div className="space-y-2">
+                <select value={motivoEspera} onChange={(e) => setMotivoEspera(e.target.value)} aria-label="Motivo de la espera" className="entrada">
+                  <option value="">Motivo de la espera…</option>
+                  {catalogos?.motivos.espera.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.nombre}
+                    </option>
+                  ))}
+                </select>
                 <textarea
-                  value={motivo}
-                  onChange={(e) => setMotivo(e.target.value)}
+                  value={detalleEspera}
+                  onChange={(e) => setDetalleEspera(e.target.value)}
                   rows={2}
-                  placeholder="¿Qué información necesita del reportante?"
+                  maxLength={1000}
+                  placeholder="Detalle o pregunta para el reportante (opcional)"
                   className="entrada"
                 />
                 <button
-                  disabled={ocupado}
+                  disabled={ocupado || !motivoEspera}
                   onClick={() =>
                     ejecutar(async () => {
-                      await api(`${base}/espera`, { method: "POST", body: JSON.stringify({ motivo }) });
-                      setMotivo("");
+                      await api(`${base}/espera`, {
+                        method: "POST",
+                        body: JSON.stringify({ motivoId: Number(motivoEspera), detalle: detalleEspera }),
+                      });
+                      setMotivoEspera("");
+                      setDetalleEspera("");
                     })
                   }
                   className="boton-secundario"
                 >
-                  Solicitar información
+                  Registrar espera y avisar al reportante
                 </button>
               </div>
             ))}
         </div>
       )}
 
-      {/* 4. Cierre */}
       {acciones.registrarTrabajo ? (
         <div className="space-y-4">
           <h3 className="text-base font-semibold">4. Cierre</h3>
@@ -264,11 +276,26 @@ export function PanelTecnico({ detalle, tecnico, recargar }: { detalle: Detalle;
             <label htmlFor="dejo" className="etiqueta">Cómo se dejó (condición final y prueba realizada)</label>
             <textarea id="dejo" value={comoSeDejo} onChange={(e) => setComoSeDejo(e.target.value)} rows={3} maxLength={4000} className="entrada" />
           </div>
-          <div>
-            <label htmlFor="mat" className="etiqueta">
-              Materiales o refacciones <span className="font-normal text-suave">(opcional)</span>
-            </label>
-            <input id="mat" value={materiales} onChange={(e) => setMateriales(e.target.value)} maxLength={1000} className="entrada" />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label htmlFor="motivo-cierre" className="etiqueta">
+                Tipo de solución <span className="font-normal text-suave">(opcional)</span>
+              </label>
+              <select id="motivo-cierre" value={motivoCierre} onChange={(e) => setMotivoCierre(e.target.value)} className="entrada">
+                <option value="">Sin especificar</option>
+                {catalogos?.motivos.cierre.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.nombre}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="mat" className="etiqueta">
+                Materiales o refacciones <span className="font-normal text-suave">(opcional)</span>
+              </label>
+              <input id="mat" value={materiales} onChange={(e) => setMateriales(e.target.value)} maxLength={1000} className="entrada" />
+            </div>
           </div>
 
           <ul className="space-y-1 border-2 border-borde bg-white p-3 text-sm">
@@ -283,9 +310,7 @@ export function PanelTecnico({ detalle, tecnico, recargar }: { detalle: Detalle;
           <div className="flex flex-wrap gap-3">
             <button
               disabled={ocupado}
-              onClick={() =>
-                ejecutar(() => api(`${base}/cierre`, { method: "PUT", body: JSON.stringify({ queSeHizo, comoSeDejo, materiales }) }))
-              }
+              onClick={() => ejecutar(() => api(`${base}/cierre`, { method: "PUT", body: JSON.stringify(datosCierre) }))}
               className="boton-secundario"
             >
               Guardar borrador
@@ -294,7 +319,7 @@ export function PanelTecnico({ detalle, tecnico, recargar }: { detalle: Detalle;
               disabled={ocupado || !completo}
               onClick={() =>
                 ejecutar(async () => {
-                  await api(`${base}/cierre`, { method: "PUT", body: JSON.stringify({ queSeHizo, comoSeDejo, materiales }) });
+                  await api(`${base}/cierre`, { method: "PUT", body: JSON.stringify(datosCierre) });
                   await api(`${base}/cerrar`, { method: "POST" });
                 })
               }
@@ -310,6 +335,7 @@ export function PanelTecnico({ detalle, tecnico, recargar }: { detalle: Detalle;
             <h3 className="text-base font-semibold">4. Cierre</h3>
             <Dato titulo="Qué se hizo" texto={intervencion.queSeHizo} />
             <Dato titulo="Cómo se dejó" texto={intervencion.comoSeDejo} />
+            <Dato titulo="Tipo de solución" texto={intervencion.motivoCierre} />
             <Dato titulo="Materiales o refacciones" texto={intervencion.materiales} />
           </div>
         )

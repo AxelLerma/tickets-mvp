@@ -66,7 +66,7 @@ export async function transaccion<T>(trabajo: () => Promise<T>): Promise<T> {
   }
 }
 
-const ARCHIVOS_ESQUEMA = ["schema.sql", "schema_notificaciones.sql"];
+const ARCHIVOS_ESQUEMA = ["schema.sql", "schema_notificaciones.sql", "schema_ampliacion.sql"];
 
 export async function iniciarEsquema(): Promise<void> {
   for (const archivo of ARCHIVOS_ESQUEMA) {

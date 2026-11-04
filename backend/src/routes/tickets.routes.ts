@@ -14,6 +14,7 @@ import {
   registrarPaso,
   solicitarInformacion,
 } from "../services/atencion.service";
+import { desvincular, relacionadosDe, vincular } from "../services/relacion.service";
 import { crearTicket, listarDelReportante } from "../services/ticket.service";
 
 const router = Router();
@@ -30,11 +31,14 @@ const idDe = (req: { params: Record<string, string | string[] | undefined> }) =>
 const nuevoTicketSchema = z.object({
   titulo: z.string().trim().min(1, "Escriba un título corto para identificar el problema.").max(120),
   categoriaId: z.number().int().positive("Seleccione una categoría."),
+  subcategoriaId: z.number().int().positive().nullable().default(null),
   sedeId: z.number().int().positive("Seleccione una sede."),
   area: z.string().trim().min(1, "Indique el área o zona.").max(100),
+  pisoZona: z.string().trim().max(100).default(""),
   equipoActivo: z.string().trim().max(120).default(""),
   descripcion: z.string().trim().min(1, "Cuéntenos qué ocurre y desde cuándo.").max(4000),
   impacto: z.enum(["solo_yo", "varias_personas", "operacion_detenida"], { message: "Indique a quién afecta el problema." }),
+  relacionadoId: z.number().int().positive().nullable().default(null),
 });
 
 const iniciarSchema = z.object({ comoSeEncontro: z.string().trim().max(4000).default("") });
@@ -47,14 +51,21 @@ const pasoSchema = z.object({
     .min(1, "Registre al menos 1 minuto.")
     .max(1440, "El tiempo máximo por paso es de 24 horas."),
 });
-const esperaSchema = z.object({ motivo: z.string().trim().min(5, "Indique qué información se necesita.").max(1000) });
+const motivoIdSchema = z
+  .number({ message: "Seleccione un motivo." })
+  .int("Seleccione un motivo.")
+  .positive("Seleccione un motivo.");
+const esperaSchema = z.object({ motivoId: motivoIdSchema, detalle: z.string().trim().max(1000).default("") });
+const cancelarSchema = z.object({ motivoId: motivoIdSchema, detalle: z.string().trim().max(1000).default("") });
 const cierreSchema = z.object({
   queSeHizo: z.string().trim().max(4000).default(""),
   comoSeDejo: z.string().trim().max(4000).default(""),
   materiales: z.string().trim().max(1000).default(""),
+  motivoCierreId: z.number().int().positive().nullable().default(null),
 });
 const motivoSchema = z.object({ motivo: z.string().trim().min(5, "Escriba el motivo (mínimo 5 caracteres).").max(1000) });
 const comentarioSchema = z.object({ texto: z.string().trim().min(1, "Escriba un comentario.").max(2000) });
+const vincularSchema = z.object({ folio: z.string().trim().min(1, "Escriba el folio del ticket.").max(30) });
 
 router.post("/", requiereRol("reportante"), async (req, res) => {
   const ticket = await crearTicket(req.usuario!.id, validar(nuevoTicketSchema, req.body));
@@ -80,7 +91,8 @@ router.post("/:id/pasos", requiereRol("tecnico"), async (req, res) => {
 });
 
 router.post("/:id/espera", requiereRol("tecnico"), async (req, res) => {
-  await solicitarInformacion(req.usuario!, idDe(req), validar(esperaSchema, req.body).motivo);
+  const d = validar(esperaSchema, req.body);
+  await solicitarInformacion(req.usuario!, idDe(req), d.motivoId, d.detalle);
   res.json({ ok: true });
 });
 
@@ -105,13 +117,28 @@ router.post("/:id/reabrir", requiereRol("reportante", "manager"), async (req, re
 });
 
 router.post("/:id/cancelar", requiereRol("manager"), async (req, res) => {
-  await cancelarTicket(req.usuario!, idDe(req), validar(motivoSchema, req.body).motivo);
+  const d = validar(cancelarSchema, req.body);
+  await cancelarTicket(req.usuario!, idDe(req), d.motivoId, d.detalle);
   res.json({ ok: true });
 });
 
 router.post("/:id/comentarios", requiereRol("reportante", "tecnico", "manager"), async (req, res) => {
   await comentar(req.usuario!, idDe(req), validar(comentarioSchema, req.body).texto);
   res.status(201).json({ ok: true });
+});
+
+router.get("/:id/relacionados", requiereRol("tecnico", "manager"), async (req, res) => {
+  res.json(await relacionadosDe(req.usuario!, idDe(req)));
+});
+
+router.post("/:id/relacionados", requiereRol("tecnico", "manager"), async (req, res) => {
+  await vincular(req.usuario!, idDe(req), validar(vincularSchema, req.body).folio);
+  res.status(201).json({ ok: true });
+});
+
+router.delete("/:id/relacionados/:otroId", requiereRol("manager"), async (req, res) => {
+  await desvincular(req.usuario!, idDe(req), Number(req.params.otroId));
+  res.json({ ok: true });
 });
 
 export default router;

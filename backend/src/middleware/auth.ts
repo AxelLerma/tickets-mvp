@@ -12,6 +12,7 @@ export interface UsuarioSesion {
   correo: string;
   rol: Rol;
   regionId: number | null;
+  grupoId: number | null;
 }
 
 declare global {
@@ -44,7 +45,7 @@ export async function autenticar(req: Request, _res: Response, next: NextFunctio
   }
 
   const fila = await uno<UsuarioSesion & { sesionVersion: number }>(
-    `SELECT id, nombre, correo, rol, region_id, sesion_version
+    `SELECT id, nombre, correo, rol, region_id, grupo_id, sesion_version
        FROM usuarios WHERE id = ? AND activo = TRUE`,
     [carga.id],
   );

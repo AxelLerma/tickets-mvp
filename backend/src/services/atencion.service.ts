@@ -32,6 +32,12 @@ async function cargarComoTecnico(usuario: UsuarioSesion, id: number, estados: st
   return ticket;
 }
 
+async function motivoDe(id: number, tipo: "espera" | "cancelacion" | "cierre"): Promise<{ nombre: string }> {
+  const motivo = await uno<{ nombre: string }>("SELECT nombre FROM motivos WHERE id = ? AND tipo = ? AND activo = TRUE", [id, tipo]);
+  if (!motivo) throw new ErrorNegocio("Seleccione un motivo válido.");
+  return motivo;
+}
+
 type ColumnaFecha = "iniciado_en" | "cerrado_en" | "reabierto_en" | "fecha_objetivo";
 
 async function cambiarEstado(
@@ -159,15 +165,23 @@ export async function registrarPaso(usuario: UsuarioSesion, ticketId: number, d:
   });
 }
 
-export async function solicitarInformacion(usuario: UsuarioSesion, ticketId: number, motivo: string) {
+export async function solicitarInformacion(usuario: UsuarioSesion, ticketId: number, motivoId: number, detalle: string) {
   await transaccion(async () => {
     const t = await cargarComoTecnico(usuario, ticketId, [ESTADOS.EN_PROCESO], "Solo se puede esperar información con el ticket en proceso.");
+    const motivo = await motivoDe(motivoId, "espera");
     const abierta = await uno("SELECT id FROM ticket_esperas WHERE ticket_id = ? AND fin IS NULL", [t.id]);
     if (abierta) throw new ErrorNegocio("Ya hay una solicitud de información abierta.");
 
-    await ejecutar("INSERT INTO ticket_esperas (ticket_id, usuario_id, motivo, inicio) VALUES (?, ?, ?, ?)", [t.id, usuario.id, motivo, ahoraIso()]);
-    await agregarComentario(t.id, usuario.id, `Se requiere información: ${motivo}`, "comentario");
-    await registrarEvento({ usuarioId: usuario.id, entidad: "ticket", entidadId: t.id, evento: "espera_iniciada", comentario: motivo });
+    const texto = detalle ? `${motivo.nombre}: ${detalle}` : motivo.nombre;
+    await ejecutar("INSERT INTO ticket_esperas (ticket_id, usuario_id, motivo, motivo_id, inicio) VALUES (?, ?, ?, ?, ?)", [
+      t.id,
+      usuario.id,
+      texto,
+      motivoId,
+      ahoraIso(),
+    ]);
+    await agregarComentario(t.id, usuario.id, `Se requiere información — ${texto}`, "comentario");
+    await registrarEvento({ usuarioId: usuario.id, entidad: "ticket", entidadId: t.id, evento: "espera_iniciada", comentario: texto });
   });
 }
 
@@ -183,14 +197,16 @@ export async function reanudarAtencion(usuario: UsuarioSesion, ticketId: number)
 export async function guardarDatosCierre(
   usuario: UsuarioSesion,
   ticketId: number,
-  d: { queSeHizo: string; comoSeDejo: string; materiales: string },
+  d: { queSeHizo: string; comoSeDejo: string; materiales: string; motivoCierreId: number | null },
 ) {
   const t = await cargarComoTecnico(usuario, ticketId, [ESTADOS.EN_PROCESO], "Los datos de cierre se capturan con el ticket en proceso.");
+  if (d.motivoCierreId) await motivoDe(d.motivoCierreId, "cierre");
   await ejecutar(
-    `INSERT INTO ticket_intervencion (ticket_id, que_se_hizo, como_se_dejo, materiales) VALUES (?, ?, ?, ?)
+    `INSERT INTO ticket_intervencion (ticket_id, que_se_hizo, como_se_dejo, materiales, motivo_cierre_id) VALUES (?, ?, ?, ?, ?)
      ON CONFLICT (ticket_id) DO UPDATE SET
-       que_se_hizo = EXCLUDED.que_se_hizo, como_se_dejo = EXCLUDED.como_se_dejo, materiales = EXCLUDED.materiales`,
-    [t.id, d.queSeHizo, d.comoSeDejo, d.materiales || null],
+       que_se_hizo = EXCLUDED.que_se_hizo, como_se_dejo = EXCLUDED.como_se_dejo,
+       materiales = EXCLUDED.materiales, motivo_cierre_id = EXCLUDED.motivo_cierre_id`,
+    [t.id, d.queSeHizo, d.comoSeDejo, d.materiales || null, d.motivoCierreId],
   );
 }
 
@@ -219,7 +235,7 @@ export async function reabrirTicket(usuario: UsuarioSesion, ticketId: number, mo
     const fila = await uno<{ cerradoEn: string | null }>("SELECT cerrado_en FROM tickets WHERE id = ?", [t.id]);
     if (usuario.rol === "reportante" && !dentroDeVentana(fila?.cerradoEn ?? null)) {
       throw new ErrorNegocio(
-        `Han pasado más de ${VENTANA_REAPERTURA_HORAS} horas desde el cierre. Solicite al coordinador que lo reabra o registre un nuevo reporte.`,
+        `Han pasado más de ${VENTANA_REAPERTURA_HORAS} horas desde el cierre. Solicite al coordinador que lo reabra o registre un nuevo reporte relacionado.`,
       );
     }
     if (usuario.rol !== "reportante" && usuario.rol !== "manager") {
@@ -227,7 +243,10 @@ export async function reabrirTicket(usuario: UsuarioSesion, ticketId: number, mo
     }
 
     const previo = await uno("SELECT que_se_hizo, como_se_dejo FROM ticket_intervencion WHERE ticket_id = ?", [t.id]);
-    await ejecutar("UPDATE ticket_intervencion SET que_se_hizo = NULL, como_se_dejo = NULL WHERE ticket_id = ?", [t.id]);
+    await ejecutar(
+      "UPDATE ticket_intervencion SET que_se_hizo = NULL, como_se_dejo = NULL, motivo_cierre_id = NULL WHERE ticket_id = ?",
+      [t.id],
+    );
 
     const ahora = new Date();
     const objetivo = new Date(ahora.getTime() + HORAS_OBJETIVO[t.prioridad] * 3_600_000);
@@ -240,13 +259,15 @@ export async function reabrirTicket(usuario: UsuarioSesion, ticketId: number, mo
   });
 }
 
-export async function cancelarTicket(usuario: UsuarioSesion, ticketId: number, motivo: string) {
+export async function cancelarTicket(usuario: UsuarioSesion, ticketId: number, motivoId: number, detalle: string) {
   await transaccion(async () => {
     const t = await cargar(usuario, ticketId);
     if (usuario.rol !== "manager") throw new ErrorNegocio("Solo la coordinación puede cancelar tickets.", 403);
-    await cambiarEstado(t.id, ESTADOS.CANCELADO, usuario.id, { comentario: motivo });
-    await registrarEvento({ usuarioId: usuario.id, entidad: "ticket", entidadId: t.id, evento: "cancelacion", comentario: motivo });
-    await agregarComentario(t.id, usuario.id, `Ticket cancelado. Motivo: ${motivo}`, "sistema");
+    const motivo = await motivoDe(motivoId, "cancelacion");
+    const texto = detalle ? `${motivo.nombre}. ${detalle}` : motivo.nombre;
+    await cambiarEstado(t.id, ESTADOS.CANCELADO, usuario.id, { comentario: texto });
+    await registrarEvento({ usuarioId: usuario.id, entidad: "ticket", entidadId: t.id, evento: "cancelacion", comentario: texto });
+    await agregarComentario(t.id, usuario.id, `Ticket cancelado. Motivo: ${texto}`, "sistema");
   });
 }
 
@@ -295,8 +316,13 @@ export async function obtenerDetalle(usuario: UsuarioSesion, id: number) {
   if (esReportante) return { ticket, comentarios, evidencias, acciones };
 
   const intervencion =
-    (await uno("SELECT como_se_encontro, que_se_hizo, como_se_dejo, materiales FROM ticket_intervencion WHERE ticket_id = ?", [id])) ??
-    { comoSeEncontro: null, queSeHizo: null, comoSeDejo: null, materiales: null };
+    (await uno(
+      `SELECT i.como_se_encontro, i.que_se_hizo, i.como_se_dejo, i.materiales,
+              i.motivo_cierre_id, m.nombre AS motivo_cierre
+         FROM ticket_intervencion i LEFT JOIN motivos m ON m.id = i.motivo_cierre_id
+        WHERE i.ticket_id = ?`,
+      [id],
+    )) ?? { comoSeEncontro: null, queSeHizo: null, comoSeDejo: null, materiales: null, motivoCierreId: null, motivoCierre: null };
 
   const pasos = await consultar(
     `SELECT p.id, p.descripcion_paso AS descripcion, p.resultado, p.minutos, p.creado_en, u.nombre AS autor

@@ -13,15 +13,18 @@ interface UsuarioAdmin {
   rol: Rol;
   regionId: number | null;
   region: string | null;
+  grupoId: number | null;
+  grupo: string | null;
   activo: boolean;
 }
-interface Region {
+interface Opcion {
   id: number;
   nombre: string;
 }
 interface Datos {
   usuarios: UsuarioAdmin[];
-  regiones: Region[];
+  regiones: Opcion[];
+  grupos: Opcion[];
 }
 
 const NOMBRE_ROL: Record<Rol, string> = {
@@ -40,12 +43,14 @@ type Modo =
 function FormUsuario({
   existente,
   regiones,
+  grupos,
   esYo,
   onListo,
   onCancelar,
 }: {
   existente?: UsuarioAdmin;
-  regiones: Region[];
+  regiones: Opcion[];
+  grupos: Opcion[];
   esYo: boolean;
   onListo: (mensaje: string) => void;
   onCancelar: () => void;
@@ -59,13 +64,14 @@ function FormUsuario({
     e.preventDefault();
     const f = new FormData(e.currentTarget);
     const regionId = rol === "tecnico" ? Number(f.get("regionId")) || null : null;
+    const grupoId = rol === "tecnico" ? Number(f.get("grupoId")) || null : null;
     setError(null);
     setEnviando(true);
     try {
       if (existente) {
         await api(`/admin/usuarios/${existente.id}`, {
           method: "PATCH",
-          body: JSON.stringify({ nombre: f.get("nombre"), telefono: f.get("telefono"), rol, regionId, activo }),
+          body: JSON.stringify({ nombre: f.get("nombre"), telefono: f.get("telefono"), rol, regionId, grupoId, activo }),
         });
       } else {
         await api("/admin/usuarios", {
@@ -77,6 +83,7 @@ function FormUsuario({
             password: f.get("password"),
             rol,
             regionId,
+            grupoId,
           }),
         });
       }
@@ -126,15 +133,28 @@ function FormUsuario({
           </select>
         </div>
         {rol === "tecnico" && (
-          <div>
-            <label htmlFor="regionId" className="etiqueta">Región de atención</label>
-            <select id="regionId" name="regionId" required defaultValue={existente?.regionId ?? ""} className="entrada">
-              <option value="" disabled>Seleccione…</option>
-              {regiones.map((r) => (
-                <option key={r.id} value={r.id}>{r.nombre}</option>
-              ))}
-            </select>
-          </div>
+          <>
+            <div>
+              <label htmlFor="regionId" className="etiqueta">Región de atención</label>
+              <select id="regionId" name="regionId" required defaultValue={existente?.regionId ?? ""} className="entrada">
+                <option value="" disabled>Seleccione…</option>
+                {regiones.map((r) => (
+                  <option key={r.id} value={r.id}>{r.nombre}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="grupoId" className="etiqueta">
+                Grupo técnico <span className="font-normal text-suave">(opcional)</span>
+              </label>
+              <select id="grupoId" name="grupoId" defaultValue={existente?.grupoId ?? ""} className="entrada">
+                <option value="">Sin grupo</option>
+                {grupos.map((g) => (
+                  <option key={g.id} value={g.id}>{g.nombre}</option>
+                ))}
+              </select>
+            </div>
+          </>
         )}
         {existente && (
           <div>
@@ -216,7 +236,7 @@ export default function Usuarios() {
   return (
     <>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl font-semibold tracking-tight">Usuarios</h1>
+        <h1 className="text-xl font-semibold tracking-tight text-ciruela">Usuarios</h1>
         <button
           onClick={() => {
             setAviso(null);
@@ -228,20 +248,21 @@ export default function Usuarios() {
         </button>
       </div>
 
-      {aviso && <div className="mb-4 rounded-sm border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{aviso}</div>}
+      {aviso && <div className="mb-4 border border-institucional/40 bg-aqua-claro px-4 py-3 text-sm text-institucional-oscuro">{aviso}</div>}
       {error && <div className="alerta-error mb-4">{error}</div>}
       {cargando && <p className="text-sm text-suave">Cargando…</p>}
 
       {datos && modo && (
         <div className="mb-6">
           {modo.tipo === "nuevo" && (
-            <FormUsuario regiones={datos.regiones} esYo={false} onListo={terminar} onCancelar={() => setModo(null)} />
+            <FormUsuario regiones={datos.regiones} grupos={datos.grupos} esYo={false} onListo={terminar} onCancelar={() => setModo(null)} />
           )}
           {modo.tipo === "editar" && (
             <FormUsuario
               key={modo.usuario.id}
               existente={modo.usuario}
               regiones={datos.regiones}
+              grupos={datos.grupos}
               esYo={modo.usuario.id === yo.id}
               onListo={terminar}
               onCancelar={() => setModo(null)}
@@ -256,12 +277,13 @@ export default function Usuarios() {
       {datos && (
         <div className="panel overflow-x-auto">
           <table className="w-full text-left text-sm">
-            <thead className="border-b border-borde text-suave">
+            <thead className="border-b-2 border-borde text-suave">
               <tr>
                 <th className="px-4 py-2 font-medium">Nombre</th>
                 <th className="px-4 py-2 font-medium">Correo</th>
                 <th className="px-4 py-2 font-medium">Perfil</th>
                 <th className="px-4 py-2 font-medium">Región</th>
+                <th className="px-4 py-2 font-medium">Grupo</th>
                 <th className="px-4 py-2 font-medium">Estado</th>
                 <th className="px-4 py-2 font-medium"><span className="sr-only">Acciones</span></th>
               </tr>
@@ -273,6 +295,7 @@ export default function Usuarios() {
                   <td className="px-4 py-2">{u.correo}</td>
                   <td className="whitespace-nowrap px-4 py-2">{NOMBRE_ROL[u.rol]}</td>
                   <td className="px-4 py-2">{u.region ?? "—"}</td>
+                  <td className="px-4 py-2">{u.grupo ?? "—"}</td>
                   <td className="px-4 py-2">{u.activo ? "Activa" : "Desactivada"}</td>
                   <td className="whitespace-nowrap px-4 py-2 text-right">
                     <button

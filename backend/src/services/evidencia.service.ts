@@ -36,6 +36,7 @@ export function etapasPermitidas(usuario: UsuarioSesion, ticket: TicketVista): E
     return esUnoDe(e, ESTADOS.NUEVO, ESTADOS.ASIGNADO) ? ["inicial_reportante"] : [];
   }
   if (usuario.rol === "tecnico") {
+    if (ticket.tecnicoId !== usuario.id) return [];
     if (e === ESTADOS.ASIGNADO) return ["inicial_tecnico"];
     if (e === ESTADOS.EN_PROCESO) return ["inicial_tecnico", "cierre"];
   }

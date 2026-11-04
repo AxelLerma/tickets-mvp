@@ -7,28 +7,39 @@ interface Elemento {
   id: number;
   nombre: string;
   activo: boolean;
-  regionId?: number;
-  region?: string;
+  padreId?: number;
+  padre?: string;
 }
-interface Datos {
-  regiones: Elemento[];
-  sedes: Elemento[];
-  categorias: Elemento[];
-}
-type Tipo = "regiones" | "sedes" | "categorias";
+
+type Datos = Record<string, Elemento[]>;
 type Accion = (peticion: () => Promise<unknown>) => Promise<void>;
 
-function Seccion({
-  tipo,
-  titulo,
+interface Seccion {
+  clave: string;
+  titulo: string;
+  padre?: { clave: string; etiqueta: string };
+}
+
+const SECCIONES: Seccion[] = [
+  { clave: "regiones", titulo: "Regiones" },
+  { clave: "sedes", titulo: "Sedes", padre: { clave: "regiones", etiqueta: "Región" } },
+  { clave: "categorias", titulo: "Categorías" },
+  { clave: "subcategorias", titulo: "Subcategorías", padre: { clave: "categorias", etiqueta: "Categoría" } },
+  { clave: "grupos", titulo: "Grupos técnicos" },
+  { clave: "motivos-espera", titulo: "Motivos de espera" },
+  { clave: "motivos-cancelacion", titulo: "Motivos de cancelación" },
+  { clave: "motivos-cierre", titulo: "Tipos de solución (motivos de cierre)" },
+];
+
+function Bloque({
+  seccion,
   elementos,
-  regiones,
+  padres,
   accion,
 }: {
-  tipo: Tipo;
-  titulo: string;
+  seccion: Seccion;
   elementos: Elemento[];
-  regiones: Elemento[];
+  padres: Elemento[];
   accion: Accion;
 }) {
   const [editando, setEditando] = useState<number | null>(null);
@@ -39,11 +50,11 @@ function Seccion({
     const formulario = e.currentTarget;
     const f = new FormData(formulario);
     accion(async () => {
-      await api(`/admin/catalogos/${tipo}`, {
+      await api(`/admin/catalogos/${seccion.clave}`, {
         method: "POST",
         body: JSON.stringify({
           nombre: f.get("nombre"),
-          regionId: tipo === "sedes" ? Number(f.get("regionId")) : undefined,
+          padreId: seccion.padre ? Number(f.get("padreId")) : undefined,
         }),
       });
       formulario.reset();
@@ -52,32 +63,39 @@ function Seccion({
 
   function guardarNombre(id: number) {
     accion(async () => {
-      await api(`/admin/catalogos/${tipo}/${id}`, { method: "PATCH", body: JSON.stringify({ nombre: texto }) });
+      await api(`/admin/catalogos/${seccion.clave}/${id}`, { method: "PATCH", body: JSON.stringify({ nombre: texto }) });
       setEditando(null);
     });
   }
 
   function cambiarEstado(el: Elemento) {
-    accion(() => api(`/admin/catalogos/${tipo}/${el.id}`, { method: "PATCH", body: JSON.stringify({ activo: !el.activo }) }));
+    accion(() => api(`/admin/catalogos/${seccion.clave}/${el.id}`, { method: "PATCH", body: JSON.stringify({ activo: !el.activo }) }));
   }
 
   return (
     <section>
-      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-suave">{titulo}</h2>
+      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-suave">{seccion.titulo}</h2>
       <div className="panel">
-        <form onSubmit={agregar} className="flex flex-wrap gap-3 border-b border-borde p-4">
+        <form onSubmit={agregar} className="flex flex-wrap gap-3 border-b-2 border-borde p-4">
           <input name="nombre" required maxLength={120} placeholder="Nombre" className="entrada min-w-48 flex-1" />
-          {tipo === "sedes" && (
-            <select name="regionId" required defaultValue="" className="entrada w-auto">
-              <option value="" disabled>Región…</option>
-              {regiones.filter((r) => r.activo).map((r) => (
-                <option key={r.id} value={r.id}>{r.nombre}</option>
-              ))}
+          {seccion.padre && (
+            <select name="padreId" required defaultValue="" aria-label={seccion.padre.etiqueta} className="entrada w-auto">
+              <option value="" disabled>
+                {seccion.padre.etiqueta}…
+              </option>
+              {padres
+                .filter((p) => p.activo)
+                .map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.nombre}
+                  </option>
+                ))}
             </select>
           )}
           <button type="submit" className="boton">Agregar</button>
         </form>
 
+        {elementos.length === 0 && <p className="px-4 py-4 text-sm text-suave">Aún no hay elementos.</p>}
         <ul className="divide-y divide-borde">
           {elementos.map((el) => (
             <li key={el.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm">
@@ -86,7 +104,7 @@ function Seccion({
               ) : (
                 <span className={el.activo ? "" : "text-suave line-through"}>
                   {el.nombre}
-                  {el.region && <span className="text-suave"> · {el.region}</span>}
+                  {el.padre && <span className="text-suave"> · {el.padre}</span>}
                 </span>
               )}
               <span className="flex items-center gap-4">
@@ -138,9 +156,15 @@ export default function Catalogos() {
 
       {datos && (
         <div className="space-y-8">
-          <Seccion tipo="regiones" titulo="Regiones" elementos={datos.regiones} regiones={datos.regiones} accion={accion} />
-          <Seccion tipo="sedes" titulo="Sedes" elementos={datos.sedes} regiones={datos.regiones} accion={accion} />
-          <Seccion tipo="categorias" titulo="Categorías" elementos={datos.categorias} regiones={datos.regiones} accion={accion} />
+          {SECCIONES.map((s) => (
+            <Bloque
+              key={s.clave}
+              seccion={s}
+              elementos={datos[s.clave] ?? []}
+              padres={s.padre ? (datos[s.padre.clave] ?? []) : []}
+              accion={accion}
+            />
+          ))}
         </div>
       )}
     </>

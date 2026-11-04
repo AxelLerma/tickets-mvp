@@ -30,24 +30,35 @@ async function regionParaRol(rol: Rol, regionId: number | null): Promise<number 
   return regionId;
 }
 
+async function grupoParaRol(rol: Rol, grupoId: number | null): Promise<number | null> {
+  if (rol !== "tecnico" || !grupoId) return null;
+  const grupo = await uno("SELECT id FROM grupos_tecnicos WHERE id = ? AND activo = TRUE", [grupoId]);
+  if (!grupo) throw new ErrorNegocio("Seleccione un grupo válido.");
+  return grupoId;
+}
+
 interface FilaUsuario {
   id: number;
   nombre: string;
   telefono: string;
   rol: Rol;
   regionId: number | null;
+  grupoId: number | null;
   activo: boolean;
 }
 
 router.get("/usuarios", async (_req, res) => {
   const usuarios = await consultar(
-    `SELECT u.id, u.nombre, u.correo, u.telefono, u.rol, u.region_id,
-            r.nombre AS region, u.activo
-       FROM usuarios u LEFT JOIN regiones r ON r.id = u.region_id
+    `SELECT u.id, u.nombre, u.correo, u.telefono, u.rol, u.region_id, r.nombre AS region,
+            u.grupo_id, g.nombre AS grupo, u.activo
+       FROM usuarios u
+       LEFT JOIN regiones r ON r.id = u.region_id
+       LEFT JOIN grupos_tecnicos g ON g.id = u.grupo_id
       ORDER BY u.activo DESC, u.nombre`,
   );
   const regiones = await consultar("SELECT id, nombre FROM regiones WHERE activo = TRUE ORDER BY nombre");
-  res.json({ usuarios, regiones });
+  const grupos = await consultar("SELECT id, nombre FROM grupos_tecnicos WHERE activo = TRUE ORDER BY nombre");
+  res.json({ usuarios, regiones, grupos });
 });
 
 const nuevoUsuarioSchema = z.object({
@@ -57,24 +68,26 @@ const nuevoUsuarioSchema = z.object({
   password: passwordSchema,
   rol: z.enum(ROLES, { message: "Seleccione un rol." }),
   regionId: z.number().int().positive().nullable().default(null),
+  grupoId: z.number().int().positive().nullable().default(null),
 });
 
 router.post("/usuarios", async (req, res) => {
   const d = validar(nuevoUsuarioSchema, req.body);
   const regionId = await regionParaRol(d.rol, d.regionId);
+  const grupoId = await grupoParaRol(d.rol, d.grupoId);
   const hash = await bcrypt.hash(d.password, 10);
 
   const id = await transaccion(async () => {
     const nuevoId = await insertar(
-      "INSERT INTO usuarios (nombre, correo, telefono, password_hash, rol, region_id) VALUES (?, ?, ?, ?, ?, ?)",
-      [d.nombre, d.correo, d.telefono, hash, d.rol, regionId],
+      "INSERT INTO usuarios (nombre, correo, telefono, password_hash, rol, region_id, grupo_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      [d.nombre, d.correo, d.telefono, hash, d.rol, regionId, grupoId],
     );
     await registrarEvento({
       usuarioId: req.usuario!.id,
       entidad: "usuario",
       entidadId: nuevoId,
       evento: "usuario_creado",
-      despues: { correo: d.correo, rol: d.rol, regionId },
+      despues: { correo: d.correo, rol: d.rol, regionId, grupoId },
     });
     return nuevoId;
   });
@@ -87,13 +100,17 @@ const editarUsuarioSchema = z.object({
   telefono: z.string().trim().max(30).default(""),
   rol: z.enum(ROLES, { message: "Seleccione un rol." }),
   regionId: z.number().int().positive().nullable().default(null),
+  grupoId: z.number().int().positive().nullable().default(null),
   activo: z.boolean(),
 });
 
 router.patch("/usuarios/:id", async (req, res) => {
   const d = validar(editarUsuarioSchema, req.body);
   const id = Number(req.params.id);
-  const actual = await uno<FilaUsuario>("SELECT id, nombre, telefono, rol, region_id, activo FROM usuarios WHERE id = ?", [id]);
+  const actual = await uno<FilaUsuario>(
+    "SELECT id, nombre, telefono, rol, region_id, grupo_id, activo FROM usuarios WHERE id = ?",
+    [id],
+  );
   if (!actual) throw new ErrorNegocio("Usuario no encontrado.", 404);
 
   const cambiaAcceso = d.rol !== actual.rol || !d.activo;
@@ -113,21 +130,22 @@ router.patch("/usuarios/:id", async (req, res) => {
   }
 
   const regionId = await regionParaRol(d.rol, d.regionId);
+  const grupoId = await grupoParaRol(d.rol, d.grupoId);
   await transaccion(async () => {
     await ejecutar(
       `UPDATE usuarios
-          SET nombre = ?, telefono = ?, rol = ?, region_id = ?, activo = ?,
+          SET nombre = ?, telefono = ?, rol = ?, region_id = ?, grupo_id = ?, activo = ?,
               sesion_version = sesion_version + ?
         WHERE id = ?`,
-      [d.nombre, d.telefono, d.rol, regionId, d.activo, d.rol !== actual.rol ? 1 : 0, id],
+      [d.nombre, d.telefono, d.rol, regionId, grupoId, d.activo, d.rol !== actual.rol ? 1 : 0, id],
     );
     await registrarEvento({
       usuarioId: req.usuario!.id,
       entidad: "usuario",
       entidadId: id,
       evento: "usuario_modificado",
-      antes: { nombre: actual.nombre, rol: actual.rol, regionId: actual.regionId, activo: actual.activo },
-      despues: { nombre: d.nombre, rol: d.rol, regionId, activo: d.activo },
+      antes: { nombre: actual.nombre, rol: actual.rol, regionId: actual.regionId, grupoId: actual.grupoId, activo: actual.activo },
+      despues: { nombre: d.nombre, rol: d.rol, regionId, grupoId, activo: d.activo },
     });
   });
 
@@ -152,51 +170,78 @@ router.post("/usuarios/:id/password", async (req, res) => {
   res.json({ ok: true });
 });
 
-const TABLAS = { regiones: "regiones", sedes: "sedes", categorias: "categorias" } as const;
-type Tipo = keyof typeof TABLAS;
+interface ConfigCatalogo {
+  tabla: string;
+  padre?: { columna: string; tabla: string; mensaje: string };
+  fijo?: { columna: string; valor: string };
+}
 
-function esTipo(valor: string): valor is Tipo {
-  return Object.hasOwn(TABLAS, valor);
+const CATALOGOS: Record<string, ConfigCatalogo> = {
+  regiones: { tabla: "regiones" },
+  sedes: { tabla: "sedes", padre: { columna: "region_id", tabla: "regiones", mensaje: "Seleccione una región válida." } },
+  categorias: { tabla: "categorias" },
+  subcategorias: {
+    tabla: "subcategorias",
+    padre: { columna: "categoria_id", tabla: "categorias", mensaje: "Seleccione una categoría válida." },
+  },
+  grupos: { tabla: "grupos_tecnicos" },
+  "motivos-espera": { tabla: "motivos", fijo: { columna: "tipo", valor: "espera" } },
+  "motivos-cancelacion": { tabla: "motivos", fijo: { columna: "tipo", valor: "cancelacion" } },
+  "motivos-cierre": { tabla: "motivos", fijo: { columna: "tipo", valor: "cierre" } },
+};
+
+function configDe(tipo: string): ConfigCatalogo {
+  if (!Object.hasOwn(CATALOGOS, tipo)) throw new ErrorNegocio("Catálogo no encontrado.", 404);
+  return CATALOGOS[tipo];
 }
 
 router.get("/catalogos", async (_req, res) => {
-  res.json({
-    regiones: await consultar("SELECT id, nombre, activo FROM regiones ORDER BY nombre"),
-    sedes: await consultar(
-      `SELECT s.id, s.nombre, s.activo, s.region_id, r.nombre AS region
-         FROM sedes s JOIN regiones r ON r.id = s.region_id ORDER BY s.nombre`,
-    ),
-    categorias: await consultar("SELECT id, nombre, activo FROM categorias ORDER BY nombre"),
-  });
+  const resultado: Record<string, unknown[]> = {};
+  for (const [clave, c] of Object.entries(CATALOGOS)) {
+    const columnasPadre = c.padre ? `, x.${c.padre.columna} AS padre_id, p.nombre AS padre` : "";
+    const unirPadre = c.padre ? `LEFT JOIN ${c.padre.tabla} p ON p.id = x.${c.padre.columna}` : "";
+    const donde = c.fijo ? `WHERE x.${c.fijo.columna} = ?` : "";
+    resultado[clave] = await consultar(
+      `SELECT x.id, x.nombre, x.activo${columnasPadre} FROM ${c.tabla} x ${unirPadre} ${donde} ORDER BY x.nombre`,
+      c.fijo ? [c.fijo.valor] : [],
+    );
+  }
+  res.json(resultado);
 });
 
 const nuevoCatalogoSchema = z.object({
   nombre: z.string().trim().min(1, "Escriba un nombre.").max(120),
-  regionId: z.number().int().positive("Seleccione una región.").optional(),
+  padreId: z.number().int().positive().optional(),
 });
 
 router.post("/catalogos/:tipo", async (req, res) => {
-  const tipo = req.params.tipo;
-  if (!esTipo(tipo)) throw new ErrorNegocio("Catálogo no encontrado.", 404);
-
-  const { nombre, regionId } = validar(nuevoCatalogoSchema, req.body);
+  const tipo = String(req.params.tipo);
+  const c = configDe(tipo);
+  const { nombre, padreId } = validar(nuevoCatalogoSchema, req.body);
 
   const id = await transaccion(async () => {
-    let nuevoId: number;
-    if (tipo === "sedes") {
-      if (!regionId || !(await uno("SELECT id FROM regiones WHERE id = ? AND activo = TRUE", [regionId]))) {
-        throw new ErrorNegocio("Seleccione una región válida.");
-      }
-      nuevoId = await insertar("INSERT INTO sedes (nombre, region_id) VALUES (?, ?)", [nombre, regionId]);
-    } else {
-      nuevoId = await insertar(`INSERT INTO ${TABLAS[tipo]} (nombre) VALUES (?)`, [nombre]);
+    const columnas = ["nombre"];
+    const valores: unknown[] = [nombre];
+    if (c.padre) {
+      const existe = padreId ? await uno(`SELECT id FROM ${c.padre.tabla} WHERE id = ? AND activo = TRUE`, [padreId]) : undefined;
+      if (!existe) throw new ErrorNegocio(c.padre.mensaje);
+      columnas.push(c.padre.columna);
+      valores.push(padreId);
     }
+    if (c.fijo) {
+      columnas.push(c.fijo.columna);
+      valores.push(c.fijo.valor);
+    }
+    const nuevoId = await insertar(
+      `INSERT INTO ${c.tabla} (${columnas.join(", ")}) VALUES (${columnas.map(() => "?").join(", ")})`,
+      valores,
+    );
     await registrarEvento({
       usuarioId: req.usuario!.id,
       entidad: `catalogo_${tipo}`,
       entidadId: nuevoId,
       evento: "catalogo_creado",
-      despues: { nombre, regionId: regionId ?? null },
+      despues: { nombre, padreId: padreId ?? null },
     });
     return nuevoId;
   });
@@ -210,20 +255,23 @@ const cambioCatalogoSchema = z.object({
 });
 
 router.patch("/catalogos/:tipo/:id", async (req, res) => {
-  const tipo = req.params.tipo;
-  if (!esTipo(tipo)) throw new ErrorNegocio("Catálogo no encontrado.", 404);
-
+  const tipo = String(req.params.tipo);
+  const c = configDe(tipo);
   const cambios = validar(cambioCatalogoSchema, req.body);
   const id = Number(req.params.id);
-  const tabla = TABLAS[tipo];
-  const actual = await uno<{ nombre: string; activo: boolean }>(`SELECT nombre, activo FROM ${tabla} WHERE id = ?`, [id]);
+
+  const filtroFijo = c.fijo ? ` AND ${c.fijo.columna} = ?` : "";
+  const actual = await uno<{ nombre: string; activo: boolean }>(
+    `SELECT nombre, activo FROM ${c.tabla} WHERE id = ?${filtroFijo}`,
+    c.fijo ? [id, c.fijo.valor] : [id],
+  );
   if (!actual) throw new ErrorNegocio("Elemento no encontrado.", 404);
 
   const nombre = cambios.nombre ?? actual.nombre;
   const activo = cambios.activo ?? actual.activo;
 
   await transaccion(async () => {
-    await ejecutar(`UPDATE ${tabla} SET nombre = ?, activo = ? WHERE id = ?`, [nombre, activo, id]);
+    await ejecutar(`UPDATE ${c.tabla} SET nombre = ?, activo = ? WHERE id = ?`, [nombre, activo, id]);
     await registrarEvento({
       usuarioId: req.usuario!.id,
       entidad: `catalogo_${tipo}`,

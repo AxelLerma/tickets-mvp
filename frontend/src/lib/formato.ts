@@ -50,6 +50,8 @@ export const ETIQUETAS_EVENTO: Record<string, string> = {
   cierre: "Cierre validado",
   reapertura: "Reapertura",
   cancelacion: "Cancelación",
+  relacion_agregada: "Ticket relacionado",
+  relacion_quitada: "Relación retirada",
 };
 
 export function tamanoLegible(bytes: number): string {

@@ -12,6 +12,7 @@ export interface Ticket {
   folio: string;
   titulo: string;
   area: string;
+  pisoZona: string | null;
   equipoActivo: string | null;
   descripcion: string;
   impacto: "solo_yo" | "varias_personas" | "operacion_detenida";
@@ -21,16 +22,33 @@ export interface Ticket {
   asignadoEn: string | null;
   fechaObjetivo: string;
   categoria: string;
+  subcategoria: string | null;
   sede: string;
   reportante: string;
   reportanteId: number;
+  reportanteCorreo: string;
+  reportanteTelefono: string;
   tecnico: string | null;
   tecnicoId: number | null;
+  tecnicoGrupoId: number | null;
 }
 
 export interface Opcion {
   id: number;
   nombre: string;
+}
+
+export interface Subcategoria {
+  id: number;
+  categoriaId: number;
+  nombre: string;
+}
+
+export interface Catalogos {
+  categorias: Opcion[];
+  sedes: Opcion[];
+  subcategorias: Subcategoria[];
+  motivos: { espera: Opcion[]; cancelacion: Opcion[]; cierre: Opcion[] };
 }
 
 export type Etapa = "inicial_reportante" | "inicial_tecnico" | "cierre";
@@ -84,7 +102,14 @@ export interface ControlesCierre {
 }
 
 export interface DatosTecnico {
-  intervencion: { comoSeEncontro: string | null; queSeHizo: string | null; comoSeDejo: string | null; materiales: string | null };
+  intervencion: {
+    comoSeEncontro: string | null;
+    queSeHizo: string | null;
+    comoSeDejo: string | null;
+    materiales: string | null;
+    motivoCierreId: number | null;
+    motivoCierre: string | null;
+  };
   pasos: Paso[];
   esperas: Espera[];
   cierre: ControlesCierre | null;

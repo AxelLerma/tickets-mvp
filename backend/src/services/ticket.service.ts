@@ -15,11 +15,14 @@ import { registrarEvento } from "./bitacora.service";
 export interface NuevoTicket {
   titulo: string;
   categoriaId: number;
+  subcategoriaId: number | null;
   sedeId: number;
   area: string;
+  pisoZona: string;
   equipoActivo: string;
   descripcion: string;
   impacto: Impacto;
+  relacionadoId: number | null;
 }
 
 export interface TicketVista {
@@ -27,6 +30,7 @@ export interface TicketVista {
   folio: string;
   titulo: string;
   area: string;
+  pisoZona: string | null;
   equipoActivo: string | null;
   descripcion: string;
   impacto: Impacto;
@@ -36,20 +40,27 @@ export interface TicketVista {
   asignadoEn: string | null;
   fechaObjetivo: string;
   categoria: string;
+  subcategoria: string | null;
   sede: string;
   reportante: string;
   reportanteId: number;
+  reportanteCorreo: string;
+  reportanteTelefono: string;
   tecnico: string | null;
   tecnicoId: number | null;
+  tecnicoGrupoId: number | null;
 }
 
 const SELECT_TICKET = `
-  SELECT t.id, t.folio, t.titulo, t.area, t.equipo_activo, t.descripcion,
+  SELECT t.id, t.folio, t.titulo, t.area, t.piso_zona, t.equipo_activo, t.descripcion,
          t.impacto, t.prioridad, t.estado, t.creado_en, t.asignado_en,
          t.fecha_objetivo, t.reportante_id, t.tecnico_id,
-         c.nombre AS categoria, s.nombre AS sede, r.nombre AS reportante, tec.nombre AS tecnico
+         c.nombre AS categoria, sc.nombre AS subcategoria, s.nombre AS sede,
+         r.nombre AS reportante, r.correo AS reportante_correo, r.telefono AS reportante_telefono,
+         tec.nombre AS tecnico, tec.grupo_id AS tecnico_grupo_id
     FROM tickets t
     JOIN categorias c ON c.id = t.categoria_id
+    LEFT JOIN subcategorias sc ON sc.id = t.subcategoria_id
     JOIN sedes s ON s.id = t.sede_id
     JOIN usuarios r ON r.id = t.reportante_id
     LEFT JOIN usuarios tec ON tec.id = t.tecnico_id`;
@@ -85,20 +96,35 @@ export async function crearTicket(reportanteId: number, datos: NuevoTicket): Pro
     const categoria = await uno("SELECT id FROM categorias WHERE id = ? AND activo = TRUE", [datos.categoriaId]);
     if (!sede || !categoria) throw new ErrorNegocio("Seleccione una categoría y una sede válidas.");
 
+    if (datos.subcategoriaId) {
+      const subcategoria = await uno(
+        "SELECT id FROM subcategorias WHERE id = ? AND categoria_id = ? AND activo = TRUE",
+        [datos.subcategoriaId, datos.categoriaId],
+      );
+      if (!subcategoria) throw new ErrorNegocio("Seleccione una subcategoría válida.");
+    }
+
+    if (datos.relacionadoId) {
+      const previo = await uno("SELECT id FROM tickets WHERE id = ? AND reportante_id = ?", [datos.relacionadoId, reportanteId]);
+      if (!previo) throw new ErrorNegocio("El reporte relacionado no existe.", 404);
+    }
+
     const ahora = new Date();
     const prioridad = PRIORIDAD_POR_IMPACTO[datos.impacto];
     const objetivo = new Date(ahora.getTime() + HORAS_OBJETIVO[prioridad] * 3_600_000);
 
     const nuevoId = await insertar(
       `INSERT INTO tickets
-         (titulo, categoria_id, sede_id, area, equipo_activo, descripcion, impacto,
+         (titulo, categoria_id, subcategoria_id, sede_id, area, piso_zona, equipo_activo, descripcion, impacto,
           prioridad, estado, reportante_id, creado_en, fecha_objetivo)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         datos.titulo,
         datos.categoriaId,
+        datos.subcategoriaId,
         datos.sedeId,
         datos.area,
+        datos.pisoZona || null,
         datos.equipoActivo || null,
         datos.descripcion,
         datos.impacto,
@@ -120,6 +146,22 @@ export async function crearTicket(reportanteId: number, datos: NuevoTicket): Pro
       evento: "creacion",
       despues: { folio, estado: ESTADOS.NUEVO, prioridad },
     });
+
+    if (datos.relacionadoId) {
+      const [menor, mayor] =
+        datos.relacionadoId < nuevoId ? [datos.relacionadoId, nuevoId] : [nuevoId, datos.relacionadoId];
+      await ejecutar(
+        "INSERT INTO ticket_relaciones (ticket_id, relacionado_id, creada_por, creada_en) VALUES (?, ?, ?, ?)",
+        [menor, mayor, reportanteId, ahora.toISOString()],
+      );
+      await registrarEvento({
+        usuarioId: reportanteId,
+        entidad: "ticket",
+        entidadId: nuevoId,
+        evento: "relacion_agregada",
+        comentario: "Reporte registrado como seguimiento de un reporte anterior",
+      });
+    }
 
     const tecnico = await tecnicoParaRegion(sede.regionId);
     if (tecnico) {
@@ -163,8 +205,20 @@ export function listarColaTecnico(tecnicoId: number): Promise<TicketVista[]> {
   );
 }
 
+export function listarGrupo(tecnicoId: number, grupoId: number): Promise<TicketVista[]> {
+  return consultar<TicketVista>(
+    `${SELECT_TICKET}
+      WHERE tec.grupo_id = ? AND t.tecnico_id <> ? AND t.estado IN (${SQL_ESTADOS_ABIERTOS})
+      ORDER BY ${ORDEN_PRIORIDAD}, t.fecha_objetivo`,
+    [grupoId, tecnicoId],
+  );
+}
+
 export function puedeVer(usuario: UsuarioSesion, ticket: TicketVista): boolean {
   if (usuario.rol === "manager") return true;
-  if (usuario.rol === "tecnico") return ticket.tecnicoId === usuario.id;
+  if (usuario.rol === "tecnico") {
+    const mismoGrupo = usuario.grupoId != null && ticket.tecnicoGrupoId === usuario.grupoId;
+    return ticket.tecnicoId === usuario.id || mismoGrupo;
+  }
   return ticket.reportanteId === usuario.id;
 }

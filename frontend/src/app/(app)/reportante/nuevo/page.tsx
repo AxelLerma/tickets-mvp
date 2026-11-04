@@ -1,43 +1,48 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState, type FormEvent } from "react";
 import { api, subirArchivo, useApi } from "@/lib/api";
 import { ETIQUETAS_IMPACTO } from "@/lib/formato";
-import type { Opcion, Ticket } from "@/lib/tipos";
+import type { Catalogos, Ticket } from "@/lib/tipos";
 
-export default function NuevoTicket() {
+function Formulario() {
   const router = useRouter();
-  const { datos: catalogos, error: errorCatalogos } = useApi<{ categorias: Opcion[]; sedes: Opcion[] }>("/catalogos");
-  
+  const parametros = useSearchParams();
+  const relacionadoId = Number(parametros.get("relacionado")) || null;
+  const { datos: catalogos, error: errorCatalogos } = useApi<Catalogos>("/catalogos");
+  const [categoriaId, setCategoriaId] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [enviando, setEnviando] = useState(false);
   const [aviso, setAviso] = useState<{ id: number; mensaje: string } | null>(null);
   const [progreso, setProgreso] = useState<string | null>(null);
+  const [enviando, setEnviando] = useState(false);
+
+  const subcategorias = catalogos?.subcategorias.filter((s) => String(s.categoriaId) === categoriaId) ?? [];
 
   async function enviar(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
     const archivos = (f.getAll("archivos") as File[]).filter((a) => a.size > 0);
-    
     setError(null);
     setAviso(null);
     setEnviando(true);
-    
+
     let ticket: Ticket;
-    
     try {
       const r = await api<{ ticket: Ticket }>("/tickets", {
         method: "POST",
         body: JSON.stringify({
           titulo: f.get("titulo"),
           categoriaId: Number(f.get("categoriaId")),
+          subcategoriaId: Number(f.get("subcategoriaId")) || null,
           sedeId: Number(f.get("sedeId")),
           area: f.get("area"),
+          pisoZona: f.get("pisoZona") ?? "",
           equipoActivo: f.get("equipoActivo") ?? "",
           descripcion: f.get("descripcion"),
           impacto: f.get("impacto"),
+          relacionadoId,
         }),
       });
       ticket = r.ticket;
@@ -46,7 +51,7 @@ export default function NuevoTicket() {
       setEnviando(false);
       return;
     }
-    
+
     try {
       for (const [i, archivo] of archivos.entries()) {
         setProgreso(`Subiendo archivo ${i + 1} de ${archivos.length}…`);
@@ -57,11 +62,10 @@ export default function NuevoTicket() {
       setEnviando(false);
       setAviso({
         id: ticket.id,
-        mensaje: `Su reporte ${ticket.folio || ''} se registró, pero un archivo no pudo subirse: ${err instanceof Error ? err.message : "error desconocido"}`,
+        mensaje: `Su reporte ${ticket.folio} se registró, pero un archivo no pudo subirse: ${err instanceof Error ? err.message : "error desconocido"}`,
       });
       return;
     }
-    
     router.push(`/tickets/${ticket.id}`);
   }
 
@@ -72,12 +76,18 @@ export default function NuevoTicket() {
       </Link>
       <h1 className="titulo-pagina mt-3">Reportar problema</h1>
 
+      {relacionadoId && (
+        <div className="mb-4 border border-borde bg-lavanda px-4 py-3 text-sm">
+          Este reporte quedará relacionado con un reporte anterior, para dar seguimiento al mismo problema.
+        </div>
+      )}
       {(error || errorCatalogos) && <div className="alerta-error mb-4">{error ?? errorCatalogos}</div>}
-      
       {aviso && (
         <div className="alerta-error mb-4">
           {aviso.mensaje}{" "}
-          <Link href={`/tickets/${aviso.id}`} className="underline">Ver reporte y adjuntar de nuevo</Link>
+          <Link href={`/tickets/${aviso.id}`} className="underline">
+            Ver reporte y adjuntar de nuevo
+          </Link>
         </div>
       )}
 
@@ -94,7 +104,14 @@ export default function NuevoTicket() {
             <label htmlFor="categoriaId" className="etiqueta">
               Categoría
             </label>
-            <select id="categoriaId" name="categoriaId" required defaultValue="" className="entrada">
+            <select
+              id="categoriaId"
+              name="categoriaId"
+              required
+              value={categoriaId}
+              onChange={(e) => setCategoriaId(e.target.value)}
+              className="entrada"
+            >
               <option value="" disabled>
                 Seleccione…
               </option>
@@ -105,6 +122,29 @@ export default function NuevoTicket() {
               ))}
             </select>
           </div>
+          <div>
+            <label htmlFor="subcategoriaId" className="etiqueta">
+              Subcategoría <span className="font-normal text-suave">(opcional)</span>
+            </label>
+            <select
+              key={categoriaId}
+              id="subcategoriaId"
+              name="subcategoriaId"
+              defaultValue=""
+              disabled={subcategorias.length === 0}
+              className="entrada"
+            >
+              <option value="">{subcategorias.length === 0 ? "Sin opciones" : "Seleccione…"}</option>
+              {subcategorias.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.nombre}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="grid gap-5 sm:grid-cols-2">
           <div>
             <label htmlFor="sedeId" className="etiqueta">
               Sede
@@ -120,14 +160,20 @@ export default function NuevoTicket() {
               ))}
             </select>
           </div>
+          <div>
+            <label htmlFor="area" className="etiqueta">
+              Área
+            </label>
+            <input id="area" name="area" maxLength={100} required placeholder="Ej. Contabilidad" className="entrada" />
+          </div>
         </div>
 
         <div className="grid gap-5 sm:grid-cols-2">
           <div>
-            <label htmlFor="area" className="etiqueta">
-              Área o zona
+            <label htmlFor="pisoZona" className="etiqueta">
+              Piso o zona <span className="font-normal text-suave">(opcional)</span>
             </label>
-            <input id="area" name="area" maxLength={100} required placeholder="Ej. Contabilidad, piso 2" className="entrada" />
+            <input id="pisoZona" name="pisoZona" maxLength={100} placeholder="Ej. Piso 2, ala norte" className="entrada" />
           </div>
           <div>
             <label htmlFor="equipoActivo" className="etiqueta">
@@ -171,5 +217,13 @@ export default function NuevoTicket() {
         </button>
       </form>
     </div>
+  );
+}
+
+export default function NuevoTicket() {
+  return (
+    <Suspense fallback={<p className="text-sm text-suave">Cargando…</p>}>
+      <Formulario />
+    </Suspense>
   );
 }

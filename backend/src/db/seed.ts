@@ -3,6 +3,14 @@ import { cerrarConexion, ejecutar, iniciarEsquema, insertar, transaccion, uno } 
 
 const PASSWORD_DEMO = "Demo1234!";
 
+const SUBCATEGORIAS: Record<string, string[]> = {
+  "Red e internet": ["Sin conexión", "Conexión lenta", "Wi-Fi"],
+  "Equipo de cómputo": ["No enciende", "Lentitud", "Falla de pantalla"],
+  Impresoras: ["Atasco de papel", "Sin tóner", "No imprime"],
+  Telefonía: ["Sin tono", "Extensión"],
+  "Software y accesos": ["Contraseña o acceso", "Instalación de programa"],
+};
+
 async function sembrar(): Promise<void> {
   await iniciarEsquema();
 
@@ -36,23 +44,35 @@ async function sembrar(): Promise<void> {
       "Instalaciones eléctricas",
       "Otro",
     ];
+    const idsCategoria = new Map<string, number>();
     for (const nombre of categorias) {
-      await insertar("INSERT INTO categorias (nombre) VALUES (?)", [nombre]);
+      idsCategoria.set(nombre, await insertar("INSERT INTO categorias (nombre) VALUES (?)", [nombre]));
     }
 
+    for (const [categoria, nombres] of Object.entries(SUBCATEGORIAS)) {
+      const categoriaId = idsCategoria.get(categoria);
+      if (!categoriaId) continue;
+      for (const nombre of nombres) {
+        await insertar("INSERT INTO subcategorias (categoria_id, nombre) VALUES (?, ?)", [categoriaId, nombre]);
+      }
+    }
+
+    const grupoNorte = await insertar("INSERT INTO grupos_tecnicos (nombre) VALUES (?)", ["Soporte Norte"]);
+    const grupoSur = await insertar("INSERT INTO grupos_tecnicos (nombre) VALUES (?)", ["Soporte Sur"]);
+
     const clave = bcrypt.hashSync(PASSWORD_DEMO, 10);
-    const usuarios: [string, string, string, string, number | null][] = [
-      ["Laura Méndez", "reportante@demo.mx", "5511111111", "reportante", null],
-      ["Carlos Ruiz", "tecnico.norte@demo.mx", "8122222222", "tecnico", norte],
-      ["Marco Díaz", "tecnico.norte2@demo.mx", "8133333333", "tecnico", norte],
-      ["Ana Torres", "tecnico.sur@demo.mx", "5533333333", "tecnico", sur],
-      ["Jorge Salas", "manager@demo.mx", "5544444444", "manager", null],
-      ["Administrador", "admin@demo.mx", "5555555555", "admin", null],
+    const usuarios: [string, string, string, string, number | null, number | null][] = [
+      ["Laura Méndez", "reportante@demo.mx", "5511111111", "reportante", null, null],
+      ["Carlos Ruiz", "tecnico.norte@demo.mx", "8122222222", "tecnico", norte, grupoNorte],
+      ["Marco Díaz", "tecnico.norte2@demo.mx", "8133333333", "tecnico", norte, grupoNorte],
+      ["Ana Torres", "tecnico.sur@demo.mx", "5533333333", "tecnico", sur, grupoSur],
+      ["Jorge Salas", "manager@demo.mx", "5544444444", "manager", null, null],
+      ["Administrador", "admin@demo.mx", "5555555555", "admin", null, null],
     ];
-    for (const [nombre, correo, telefono, rol, regionId] of usuarios) {
+    for (const [nombre, correo, telefono, rol, regionId, grupoId] of usuarios) {
       await ejecutar(
-        "INSERT INTO usuarios (nombre, correo, telefono, password_hash, rol, region_id) VALUES (?, ?, ?, ?, ?, ?)",
-        [nombre, correo, telefono, clave, rol, regionId],
+        "INSERT INTO usuarios (nombre, correo, telefono, password_hash, rol, region_id, grupo_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [nombre, correo, telefono, clave, rol, regionId, grupoId],
       );
     }
   });

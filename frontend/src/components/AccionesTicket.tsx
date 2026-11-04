@@ -1,17 +1,35 @@
 "use client";
 
 import { useState } from "react";
-import { api, useAccion } from "@/lib/api";
-import type { Acciones } from "@/lib/tipos";
+import { api, useAccion, useApi } from "@/lib/api";
+import type { Acciones, Catalogos } from "@/lib/tipos";
 
 export function AccionesTicket({ ticketId, acciones, recargar }: { ticketId: number; acciones: Acciones; recargar: () => void }) {
   const { error, ocupado, ejecutar } = useAccion(recargar);
+  const { datos: catalogos } = useApi<Catalogos>("/catalogos");
   const [modo, setModo] = useState<"reabrir" | "cancelar" | null>(null);
-  const [motivo, setMotivo] = useState("");
+  const [texto, setTexto] = useState("");
+  const [motivoId, setMotivoId] = useState("");
 
   if (!acciones.reabrir && !acciones.cancelar) return null;
 
-  const titulo = modo === "reabrir" ? "Motivo de la reapertura" : "Motivo de la cancelación";
+  function volver() {
+    setModo(null);
+    setTexto("");
+    setMotivoId("");
+  }
+
+  function confirmar() {
+    if (modo === "reabrir") {
+      ejecutar(() => api(`/tickets/${ticketId}/reabrir`, { method: "POST", body: JSON.stringify({ motivo: texto }) }));
+    } else {
+      ejecutar(() =>
+        api(`/tickets/${ticketId}/cancelar`, { method: "POST", body: JSON.stringify({ motivoId: Number(motivoId), detalle: texto }) }),
+      );
+    }
+  }
+
+  const puedeConfirmar = modo === "reabrir" ? texto.trim().length >= 5 : motivoId !== "";
 
   return (
     <section className="panel space-y-3 p-5">
@@ -31,23 +49,30 @@ export function AccionesTicket({ ticketId, acciones, recargar }: { ticketId: num
         </div>
       ) : (
         <>
-          <label htmlFor="motivo" className="etiqueta">{titulo}</label>
-          <textarea id="motivo" value={motivo} onChange={(e) => setMotivo(e.target.value)} rows={3} maxLength={1000} className="entrada" />
+          {modo === "cancelar" && (
+            <div>
+              <label htmlFor="motivo-cancelacion" className="etiqueta">
+                Motivo de la cancelación
+              </label>
+              <select id="motivo-cancelacion" value={motivoId} onChange={(e) => setMotivoId(e.target.value)} className="entrada">
+                <option value="">Seleccione un motivo…</option>
+                {catalogos?.motivos.cancelacion.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.nombre}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          <label htmlFor="texto-accion" className="etiqueta">
+            {modo === "reabrir" ? "Motivo de la reapertura" : "Detalle (opcional)"}
+          </label>
+          <textarea id="texto-accion" value={texto} onChange={(e) => setTexto(e.target.value)} rows={3} maxLength={1000} className="entrada" />
           <div className="flex gap-3">
-            <button
-              disabled={ocupado || motivo.trim().length < 5}
-              onClick={() => ejecutar(() => api(`/tickets/${ticketId}/${modo}`, { method: "POST", body: JSON.stringify({ motivo }) }))}
-              className="boton"
-            >
+            <button disabled={ocupado || !puedeConfirmar} onClick={confirmar} className="boton">
               Confirmar
             </button>
-            <button
-              onClick={() => {
-                setModo(null);
-                setMotivo("");
-              }}
-              className="boton-secundario"
-            >
+            <button onClick={volver} className="boton-secundario">
               Volver
             </button>
           </div>
