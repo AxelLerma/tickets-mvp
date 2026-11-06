@@ -31,6 +31,13 @@ export interface Ticket {
   tecnico: string | null;
   tecnicoId: number | null;
   tecnicoGrupoId: number | null;
+  similares?: {
+    id: number;
+    folio: string;
+    titulo: string;
+    estado: string;
+    creadoEn: string;
+  }[];
 }
 
 export interface Opcion {

@@ -109,3 +109,25 @@ html.oscuro .boton-secundario:hover {
 html.oscuro .panel {
   box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.45);
 }
+
+@media print {
+  .print-ocultar,
+  .print\\:hidden {
+    display: none !important;
+  }
+  body {
+    background: #fff !important;
+    color: #000 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .panel {
+    box-shadow: none !important;
+    border: 1px solid #b49bd4 !important;
+    background: #fff !important;
+  }
+  #tabla-reporte {
+    width: 100% !important;
+    display: table !important;
+  }
+}

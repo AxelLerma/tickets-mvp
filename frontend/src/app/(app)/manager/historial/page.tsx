@@ -1,170 +1,386 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
-import { InsigniaEstado, Prioridad } from "@/components/Insignias";
 import { useApi } from "@/lib/api";
-import { ETIQUETAS_ESTADO, fechaHora } from "@/lib/formato";
+import { fechaHora } from "@/lib/formato";
 import type { Opcion } from "@/lib/tipos";
 
-interface Fila {
-  id: number;
-  folio: string;
+const REPORTES: [string, string][] = [
+  ["cerrados", "Historial de tickets cerrados"],
+  ["carga", "Carga por técnico"],
+  ["actividades", "Actividades por categoría o sede"],
+  ["reaperturas", "Reaperturas"],
+  ["cumplimiento", "Cumplimiento de fechas objetivo"],
+];
+
+const ESTADOS: [string, string][] = [
+  ["nuevo", "Nuevo"],
+  ["asignado", "Asignado"],
+  ["en_proceso", "En proceso"],
+  ["listo_para_cerrar", "Listo para cerrar"],
+  ["cerrado", "Cerrado"],
+  ["reabierto", "Reabierto"],
+  ["cancelado", "Cancelado"],
+];
+
+const PRIORIDADES: [string, string][] = [
+  ["baja", "Baja"],
+  ["normal", "Normal"],
+  ["alta", "Alta"],
+];
+
+interface Columna {
+  clave: string;
   titulo: string;
-  estado: string;
-  prioridad: string;
-  creadoEn: string;
-  cerradoEn: string | null;
-  sede: string;
-  categoria: string;
-  tecnico: string | null;
+  ancho?: number;
 }
 
-interface Respuesta {
-  tickets: Fila[];
-  resumen: { ultimas24h: number; ultimos7d: number; ultimos30d: number };
+interface Reporte {
+  tipo: string;
+  titulo: string;
+  descripcion: string;
+  columnas: Columna[];
+  filas: Record<string, string | number>[];
+  total: number;
+  resumen: string | null;
+  filtros: string;
+  generado: string;
+}
+
+interface Opcion {
+  id: number;
+  nombre: string;
+}
+
+interface OpcionesRespuesta {
   sedes: Opcion[];
+  categorias: Opcion[];
   tecnicos: Opcion[];
 }
 
-const OPCIONES_ESTADO: [string, string][] = [
-  ["cerrado", "Cerrados"],
-  ["abiertos", "Abiertos"],
-  ["cancelado", "Cancelados"],
-  ["reabierto", "Reabiertos"],
-  ["todos", "Todos"],
-];
-
-function Cifra({ valor, texto }: { valor: number; texto: string }) {
-  return (
-    <div className="panel p-4">
-      <p className="text-3xl font-semibold text-ciruela">{valor}</p>
-      <p className="text-sm text-suave">{texto}</p>
-    </div>
-  );
+interface Filtros {
+  tipo: string;
+  desde: string;
+  hasta: string;
+  sedeId: string;
+  categoriaId: string;
+  tecnicoId: string;
+  estado: string;
+  prioridad: string;
 }
 
-export default function Historial() {
-  const [estado, setEstado] = useState("cerrado");
-  const [sedeId, setSedeId] = useState("");
-  const [tecnicoId, setTecnicoId] = useState("");
-  const [texto, setTexto] = useState("");
-  const [consulta, setConsulta] = useState("estado=cerrado");
+const hoyLocal = (): string =>
+  new Intl.DateTimeFormat("en-CA", { timeZone: "America/Mexico_City" }).format(new Date());
 
-  const { datos, error, cargando } = useApi<Respuesta>(`/manager/tickets?${consulta}`);
+const restarDias = (fecha: string, dias: number): string => {
+  const d = new Date(`${fecha}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - dias);
+  return d.toISOString().slice(0, 10);
+};
+
+export default function Historial() {
+  const [filtros, setFiltros] = useState<Filtros>({
+    tipo: "cerrados",
+    desde: restarDias(hoyLocal(), 30),
+    hasta: hoyLocal(),
+    sedeId: "",
+    categoriaId: "",
+    tecnicoId: "",
+    estado: "cerrado",
+    prioridad: "",
+  });
+
+  const { datos: opciones } = useApi<OpcionesRespuesta>("/reportes/opciones");
+
+  function construirQuery(): string {
+    const p = new URLSearchParams();
+    p.set("tipo", filtros.tipo);
+    if (filtros.desde) p.set("desde", filtros.desde);
+    if (filtros.hasta) p.set("hasta", filtros.hasta);
+    if (filtros.sedeId) p.set("sedeId", filtros.sedeId);
+    if (filtros.categoriaId) p.set("categoriaId", filtros.categoriaId);
+    if (filtros.tecnicoId) p.set("tecnicoId", filtros.tecnicoId);
+    if (filtros.estado) p.set("estado", filtros.estado);
+    if (filtros.prioridad) p.set("prioridad", filtros.prioridad);
+    if (filtros.tipo === "actividades") p.set("agrupar", "categoria");
+    return p.toString();
+  }
+
+  const [consulta, setConsulta] = useState(construirQuery());
 
   function buscar(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const p = new URLSearchParams({ estado });
-    if (sedeId) p.set("sedeId", sedeId);
-    if (tecnicoId) p.set("tecnicoId", tecnicoId);
-    if (texto.trim()) p.set("q", texto.trim());
-    setConsulta(p.toString());
+    setConsulta(construirQuery());
+  }
+
+  const params = new URLSearchParams(consulta);
+  const tipo = params.get("tipo") ?? "cerrados";
+  params.delete("tipo");
+  const qs = params.toString();
+
+  const { datos, error, cargando } = useApi<Reporte>(`/reportes/${tipo}?${qs}`);
+
+  const usaEstado = filtros.tipo === "cerrados" || filtros.tipo === "actividades";
+
+  function exportarCsv() {
+    if (!datos) return;
+    const headers = datos.columnas
+      .map((c) => {
+        const s = String(c.titulo).replace(/"/g, '""');
+        return /[",\r\n]/.test(s) ? `"${s}"` : s;
+      })
+      .join(",");
+    const rows = datos.filas
+      .map((fila) =>
+        datos.columnas
+          .map((c) => {
+            const v = fila[c.clave] ?? "";
+            const s = String(v).replace(/"/g, '""');
+            return /[",\r\n]/.test(s) ? `"${s}"` : s;
+          })
+          .join(","),
+      )
+      .join("\r\n");
+    const blob = new Blob([`\uFEFF${headers}\r\n${rows}\r\n`], {
+      type: "text/csv;charset=utf-8",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `reporte-${datos.tipo}-${hoyLocal()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function imprimir() {
+    window.print();
   }
 
   return (
     <>
-      <h1 className="titulo-pagina">Historial de tickets</h1>
+      <h1 className="titulo-pagina">Historial y Reportes</h1>
 
-      {datos && (
-        <section className="mb-6 grid grid-cols-3 gap-3">
-          <Cifra valor={datos.resumen.ultimas24h} texto="Cerrados en 24 horas" />
-          <Cifra valor={datos.resumen.ultimos7d} texto="Cerrados en 7 días" />
-          <Cifra valor={datos.resumen.ultimos30d} texto="Cerrados en 30 días" />
-        </section>
-      )}
-
-      <form onSubmit={buscar} className="panel mb-6 grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-4">
+      <form onSubmit={buscar} className="panel mb-6 grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-5 print:hidden">
         <div>
-          <label htmlFor="estado" className="etiqueta">Estado</label>
-          <select id="estado" value={estado} onChange={(e) => setEstado(e.target.value)} className="entrada">
-            {OPCIONES_ESTADO.map(([valor, nombre]) => (
+          <label htmlFor="tipo" className="etiqueta">
+            Reporte
+          </label>
+          <select
+            id="tipo"
+            value={filtros.tipo}
+            onChange={(e) => {
+              const valor = e.target.value;
+              setFiltros((f) => ({ ...f, tipo: valor }));
+              if (valor !== "cerrados" && valor !== "actividades") {
+                setFiltros((f) => ({ ...f, estado: "" }));
+              }
+            }}
+            className="entrada"
+          >
+            {REPORTES.map(([valor, nombre]) => (
               <option key={valor} value={valor}>{nombre}</option>
             ))}
           </select>
         </div>
         <div>
-          <label htmlFor="sede" className="etiqueta">Sede</label>
-          <select id="sede" value={sedeId} onChange={(e) => setSedeId(e.target.value)} className="entrada">
+          <label htmlFor="desde" className="etiqueta">
+            Desde
+          </label>
+          <input
+            id="desde"
+            type="date"
+            value={filtros.desde}
+            onChange={(e) => setFiltros((f) => ({ ...f, desde: e.target.value }))}
+            className="entrada"
+          />
+        </div>
+        <div>
+          <label htmlFor="hasta" className="etiqueta">
+            Hasta
+          </label>
+          <input
+            id="hasta"
+            type="date"
+            value={filtros.hasta}
+            onChange={(e) => setFiltros((f) => ({ ...f, hasta: e.target.value }))}
+            className="entrada"
+          />
+        </div>
+        <div>
+          <label htmlFor="sede" className="etiqueta">
+            Sede
+          </label>
+          <select
+            id="sede"
+            value={filtros.sedeId}
+            onChange={(e) => setFiltros((f) => ({ ...f, sedeId: e.target.value }))}
+            className="entrada"
+          >
             <option value="">Todas</option>
-            {datos?.sedes.map((s) => (
+            {opciones?.sedes.map((s) => (
               <option key={s.id} value={s.id}>{s.nombre}</option>
             ))}
           </select>
         </div>
         <div>
-          <label htmlFor="tecnico" className="etiqueta">Técnico</label>
-          <select id="tecnico" value={tecnicoId} onChange={(e) => setTecnicoId(e.target.value)} className="entrada">
-            <option value="">Todos</option>
-            {datos?.tecnicos.map((t) => (
-              <option key={t.id} value={t.id}>{t.nombre}</option>
+          <label htmlFor="categoria" className="etiqueta">
+            Categoría
+          </label>
+          <select
+            id="categoria"
+            value={filtros.categoriaId}
+            onChange={(e) => setFiltros((f) => ({ ...f, categoriaId: e.target.value }))}
+            className="entrada"
+          >
+            <option value="">Todas</option>
+            {opciones?.categorias.map((c) => (
+              <option key={c.id} value={c.id}>{c.nombre}</option>
             ))}
           </select>
         </div>
         <div>
-          <label htmlFor="texto" className="etiqueta">Folio o título</label>
-          <input id="texto" value={texto} onChange={(e) => setTexto(e.target.value)} maxLength={100} placeholder="Ej. TCK-2026 o impresora" className="entrada" />
+          <label htmlFor="tecnico" className="etiqueta">
+            Técnico
+          </label>
+          <select
+            id="tecnico"
+            value={filtros.tecnicoId}
+            onChange={(e) => setFiltros((f) => ({ ...f, tecnicoId: e.target.value }))}
+            className="entrada"
+          >
+            <option value="">Todos</option>
+            {opciones?.tecnicos.map((t) => (
+              <option key={t.id} value={t.id}>{t.nombre}</option>
+            ))}
+          </select>
         </div>
-        <div className="sm:col-span-2 lg:col-span-4">
-          <button type="submit" className="boton">Buscar</button>
+        {usaEstado && (
+          <div>
+            <label htmlFor="estado" className="etiqueta">
+              Estado
+            </label>
+            <select
+              id="estado"
+              value={filtros.estado}
+              onChange={(e) => setFiltros((f) => ({ ...f, estado: e.target.value }))}
+              className="entrada"
+            >
+              {ESTADOS.map(([valor, nombre]) => (
+                <option key={valor} value={valor}>{nombre}</option>
+              ))}
+            </select>
+          </div>
+        )}
+        <div>
+          <label htmlFor="prioridad" className="etiqueta">
+            Prioridad
+          </label>
+          <select
+            id="prioridad"
+            value={filtros.prioridad}
+            onChange={(e) => setFiltros((f) => ({ ...f, prioridad: e.target.value }))}
+            className="entrada"
+          >
+            <option value="">Todas</option>
+            {PRIORIDADES.map(([valor, nombre]) => (
+              <option key={valor} value={valor}>{nombre}</option>
+            ))}
+          </select>
+        </div>
+        <div className="sm:col-span-2 lg:col-span-5 flex flex-wrap items-end gap-3">
+          <button type="submit" className="boton">
+            Consultar
+          </button>
+          <span className="text-xs text-suave ml-2">
+            Si deja las fechas vacías se usan los últimos 30 días.
+          </span>
         </div>
       </form>
 
-      {error && <div className="alerta-error">{error}</div>}
-      {cargando && <p className="text-sm text-suave">Cargando…</p>}
+      {error && <div className="alerta-error mb-4 print:hidden">{error}</div>}
+      {cargando && <p className="text-sm text-suave print:hidden">Cargando…</p>}
 
       {datos && (
         <>
-          <p className="mb-2 text-xs text-suave">
-            {datos.tickets.length} resultado(s) · se muestran hasta 200, del más reciente al más antiguo.
-          </p>
+          <div className="mb-3 flex flex-wrap items-start justify-between gap-3 print:hidden">
+            <div>
+              <h2 className="text-lg font-semibold text-ciruela">{datos.titulo}</h2>
+              <p className="text-sm text-suave">{datos.descripcion}</p>
+              <p className="mt-1 text-xs text-suave">
+                {datos.filtros} · Generado: {datos.generado}
+              </p>
+              {datos.resumen && <p className="mt-1 text-sm font-medium">{datos.resumen}</p>}
+            </div>
+            <div className="flex gap-3">
+              <button type="button" onClick={exportarCsv} className="boton-secundario">
+                Exportar CSV
+              </button>
+              <button type="button" onClick={imprimir} className="boton">
+                Exportar PDF / Imprimir
+              </button>
+            </div>
+          </div>
+
           <div className="panel overflow-x-auto">
-            <table className="w-full text-left text-sm">
+            <table className="w-full text-left text-sm" id="tabla-reporte">
               <thead className="border-b-2 border-borde text-suave">
                 <tr>
-                  <th className="px-4 py-2 font-medium">Folio</th>
-                  <th className="px-4 py-2 font-medium">Título</th>
-                  <th className="px-4 py-2 font-medium">Sede</th>
-                  <th className="px-4 py-2 font-medium">Categoría</th>
-                  <th className="px-4 py-2 font-medium">Técnico</th>
-                  <th className="px-4 py-2 font-medium">Prioridad</th>
-                  <th className="px-4 py-2 font-medium">Estado</th>
-                  <th className="px-4 py-2 font-medium">Cierre / registro</th>
+                  {datos.columnas.map((c) => (
+                    <th key={c.clave} className="whitespace-nowrap px-4 py-2 font-medium">
+                      {c.titulo}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-borde">
-                {datos.tickets.length === 0 && (
+                {datos.filas.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="px-4 py-6 text-center text-suave">
-                      No hay tickets con estos filtros.
+                    <td colSpan={datos.columnas.length} className="px-4 py-6 text-center text-suave">
+                      No hay registros con los filtros seleccionados.
                     </td>
                   </tr>
                 )}
-                {datos.tickets.map((t) => (
-                  <tr key={t.id} className="hover:bg-fondo">
-                    <td className="whitespace-nowrap px-4 py-2 font-mono text-xs">
-                      <Link href={`/tickets/${t.id}`} className="underline underline-offset-2">
-                        {t.folio}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-2">{t.titulo}</td>
-                    <td className="whitespace-nowrap px-4 py-2">{t.sede}</td>
-                    <td className="whitespace-nowrap px-4 py-2">{t.categoria}</td>
-                    <td className="whitespace-nowrap px-4 py-2">{t.tecnico ?? "—"}</td>
-                    <td className="px-4 py-2">
-                      <Prioridad valor={t.prioridad} />
-                    </td>
-                    <td className="px-4 py-2" title={ETIQUETAS_ESTADO[t.estado]}>
-                      <InsigniaEstado estado={t.estado} />
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-2">{fechaHora(t.cerradoEn ?? t.creadoEn)}</td>
+                {datos.filas.map((fila, i) => (
+                  <tr key={i} className="hover:bg-fondo">
+                    {datos.columnas.map((c) => (
+                      <td key={c.clave} className="px-4 py-2 align-top">
+                        {fila[c.clave]}
+                      </td>
+                    ))}
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+          {datos.total > datos.filas.length && (
+            <p className="mt-2 text-xs text-suave print:hidden">
+              Se muestran {datos.filas.length} de {datos.total} registros. La exportación incluye todos.
+            </p>
+          )}
         </>
       )}
+
+      <style>
+        {`
+          @media print {
+            body {
+              background: #fff !important;
+              color: #000 !important;
+            }
+            .panel {
+              box-shadow: none !important;
+              border: 1px solid #b49bd4 !important;
+            }
+            #tabla-reporte {
+              width: 100% !important;
+            }
+            .print:hidden {
+              display: none !important;
+            }
+          }
+        `}
+      </style>
     </>
   );
 }

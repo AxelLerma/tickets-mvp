@@ -12,7 +12,7 @@ import { PanelTecnico } from "@/components/PanelTecnico";
 import { Relacionados } from "@/components/Relacionados";
 import { useSesion } from "@/components/SesionProvider";
 import { useApi } from "@/lib/api";
-import { ETIQUETAS_IMPACTO, fechaHora } from "@/lib/formato";
+import { ETIQUETAS_ESTADO, ETIQUETAS_IMPACTO, fechaHora } from "@/lib/formato";
 import { RUTA_INICIO } from "@/lib/roles";
 import type { Detalle } from "@/lib/tipos";
 
@@ -92,6 +92,24 @@ export default function PaginaTicket() {
                       )}
                     </dd>
                   </div>
+                  {t.similares && t.similares.length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-borde">
+                      <dt className="text-xs text-suave">Tickets similares (antecedentes)</dt>
+                      <ul className="mt-1 space-y-1 text-sm">
+                        {t.similares.map((s) => (
+                          <li key={s.id}>
+                            <Link
+                              href={`/tickets/${s.id}`}
+                              className="text-xs underline underline-offset-2 hover:text-tinta"
+                            >
+                              {s.folio} — {s.titulo}
+                            </Link>
+                            <span className="ml-1 text-[11px] text-suave">{ETIQUETAS_ESTADO[s.estado] ?? s.estado}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </>
               )}
               {(

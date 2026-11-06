@@ -9,6 +9,14 @@ import {
 } from "../core/estados";
 import { consultar, ejecutar, transaccion, uno } from "../db/connection";
 import type { UsuarioSesion } from "../middleware/auth";
+
+interface SimilarTicket {
+  id: number;
+  folio: string;
+  titulo: string;
+  estado: string;
+  creadoEn: string;
+}
 import { registrarEvento } from "./bitacora.service";
 import { etapasPermitidas } from "./evidencia.service";
 import { obtenerPorId, puedeVer, type TicketVista } from "./ticket.service";
@@ -339,6 +347,32 @@ export async function obtenerDetalle(usuario: UsuarioSesion, id: number) {
     [id],
   );
 
+  let similares: SimilarTicket[] = [];
+  if (usuario.rol === "tecnico" || usuario.rol === "manager") {
+    const ref = await uno<{ sedeId: number; categoriaId: number; equipoActivo: string | null }>(
+      "SELECT sede_id, categoria_id, equipo_activo FROM tickets WHERE id = ?",
+      [id],
+    );
+    if (ref) {
+      const condiciones: string[] = [];
+      const params: unknown[] = [id];
+      if (ref.equipoActivo && ref.equipoActivo.trim() !== "") {
+        condiciones.push("s.equipo_activo = ?");
+        params.push(ref.equipoActivo);
+      }
+      condiciones.push("s.sede_id = ? AND s.categoria_id = ?");
+      params.push(ref.sedeId, ref.categoriaId);
+      similares = await consultar<SimilarTicket>(
+        `SELECT s.id, s.folio, s.titulo, s.estado, s.creado_en AS creadoEn
+           FROM tickets s
+          WHERE s.id <> ?
+            AND (${condiciones.join(" OR ")})
+          ORDER BY s.creado_en DESC LIMIT 5`,
+        params,
+      );
+    }
+  }
+
   return {
     ticket,
     comentarios,
@@ -351,5 +385,6 @@ export async function obtenerDetalle(usuario: UsuarioSesion, id: number) {
       cierre: ticket.estado === ESTADOS.EN_PROCESO ? await evaluarCierre(id) : null,
     },
     historial,
+    similares,
   };
 }
