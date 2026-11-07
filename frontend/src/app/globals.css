@@ -111,8 +111,7 @@ html.oscuro .panel {
 }
 
 @media print {
-  .print-ocultar,
-  .print\\:hidden {
+  .print-ocultar {
     display: none !important;
   }
   html.oscuro,

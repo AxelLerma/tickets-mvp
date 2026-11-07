@@ -1,4 +1,4 @@
-ï»¿"use client";
+"use client";
 
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
@@ -7,8 +7,8 @@ import { fechaHora } from "@/lib/formato";
 
 const REPORTES: [string, string][] = [
   ["cerrados", "Historial de tickets cerrados"],
-  ["carga", "Carga por tÃ©cnico"],
-  ["actividades", "Actividades por categorÃ­a o sede"],
+  ["carga", "Carga por técnico"],
+  ["actividades", "Actividades por categoría o sede"],
   ["reaperturas", "Reaperturas"],
   ["cumplimiento", "Cumplimiento de fechas objetivo"],
 ];
@@ -243,7 +243,7 @@ export default function Historial() {
         </div>
         <div>
           <label htmlFor="categoria" className="etiqueta">
-            CategorÃ­a
+            Categoría
           </label>
           <select
             id="categoria"
@@ -259,7 +259,7 @@ export default function Historial() {
         </div>
         <div>
           <label htmlFor="tecnico" className="etiqueta">
-            TÃ©cnico
+            Técnico
           </label>
           <select
             id="tecnico"
@@ -311,13 +311,13 @@ export default function Historial() {
             Consultar
           </button>
           <span className="text-xs text-suave ml-2">
-            Si deja las fechas vacÃ­as se usan los Ãºltimos 30 dÃ­as.
+            Si deja las fechas vacías se usan los últimos 30 días.
           </span>
         </div>
       </form>
 
       {error && <div className="alerta-error mb-4 print:hidden">{error}</div>}
-      {cargando && <p className="text-sm text-suave print:hidden">Cargandoâ€¦</p>}
+      {cargando && <p className="text-sm text-suave print:hidden">Cargando…</p>}
 
       {datos && (
         <>
@@ -326,7 +326,7 @@ export default function Historial() {
               <h2 className="text-lg font-semibold text-ciruela">{datos.titulo}</h2>
               <p className="text-sm text-suave">{datos.descripcion}</p>
               <p className="mt-1 text-xs text-suave">
-                {datos.filtros} Â· Generado: {datos.generado}
+                {datos.filtros} · Generado: {datos.generado}
               </p>
               {datos.resumen && <p className="mt-1 text-sm font-medium">{datos.resumen}</p>}
             </div>
@@ -379,7 +379,7 @@ export default function Historial() {
           </div>
           {datos.total > datos.filas.length && (
             <p className="mt-2 text-xs text-suave print:hidden">
-              Se muestran {datos.filas.length} de {datos.total} registros. La exportaciÃ³n incluye todos.
+              Se muestran {datos.filas.length} de {datos.total} registros. La exportación incluye todos.
             </p>
           )}
         </>
@@ -398,9 +398,6 @@ export default function Historial() {
             }
             #tabla-reporte {
               width: 100% !important;
-            }
-            .print:hidden {
-              display: none !important;
             }
           }
         `}

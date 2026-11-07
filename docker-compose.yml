@@ -1,0 +1,56 @@
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: tickets-db
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: STARFOX24
+      POSTGRES_DB: tickets
+    volumes:
+      - tickets_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: tickets-backend
+    ports:
+      - "4000:4000"
+    environment:
+      PORT: 4000
+      JWT_SECRET: k8Qv2mZp7TnX4rYw9LcB3dFh6JsA1eUg5NoRt0PiMqVx
+      FRONTEND_URL: http://localhost:3000
+      DATABASE_URL: postgresql://postgres:STARFOX24@db:5432/tickets
+      STORAGE_DIR: storage
+      MAX_UPLOAD_MB: 100
+      TICKET_COOLDOWN_SEG: 10
+      TICKETS_POR_HORA: 10
+      CAPACIDAD_BALANCEADO: 4
+      CAPACIDAD_SATURADO: 8
+      NODE_ENV: production
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: tickets-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      FRONTEND_URL: http://localhost:3000
+      NEXT_PUBLIC_FRONTEND_URL: http://localhost:3000
+    depends_on:
+      - backend
+
+volumes:
+  tickets_db_data:
