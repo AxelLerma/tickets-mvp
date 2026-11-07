@@ -271,7 +271,7 @@ async function actividades(f: Filtros): Promise<Reporte> {
 }
 
 async function reaperturas(f: Filtros): Promise<Reporte> {
-  const c = new Condiciones().agregar("b.entidad = 'ticket'").agregar("b.evento = 'reapertura'").rango("b.fecha", f).ticket(f, { estado: false });
+  const c = new Condiciones().agregar("b.entidad = 'ticket'").agregar("b.evento = 'reapertura'").rango("b.fecha", f).ticket(f);
   const filas = await consultar<{
     fecha: string;
     motivo: string | null;
@@ -321,7 +321,7 @@ async function reaperturas(f: Filtros): Promise<Reporte> {
 }
 
 async function cumplimiento(f: Filtros): Promise<Reporte> {
-  const c = new Condiciones().agregar("t.estado <> 'cancelado'").rango("t.creado_en", f).ticket(f, { estado: false });
+  const c = new Condiciones().agregar("t.estado <> 'cancelado'").rango("t.creado_en", f).ticket(f);
   const filas = await consultar<{
     folio: string;
     titulo: string;

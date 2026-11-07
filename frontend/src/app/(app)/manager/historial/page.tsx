@@ -1,14 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useState, type FormEvent } from "react";
+import { useState } from "react";
 import { useApi } from "@/lib/api";
 import { fechaHora } from "@/lib/formato";
+import type { Opcion } from "@/lib/tipos";
 
 const REPORTES: [string, string][] = [
   ["cerrados", "Historial de tickets cerrados"],
-  ["carga", "Carga por técnico"],
-  ["actividades", "Actividades por categoría o sede"],
+  ["carga", "Carga por tÃ©cnico"],
+  ["actividades", "Actividades por categorÃ­a o sede"],
   ["reaperturas", "Reaperturas"],
   ["cumplimiento", "Cumplimiento de fechas objetivo"],
 ];
@@ -45,11 +46,6 @@ interface Reporte {
   resumen: string | null;
   filtros: string;
   generado: string;
-}
-
-interface Opcion {
-  id: number;
-  nombre: string;
 }
 
 interface OpcionesRespuesta {
@@ -92,35 +88,20 @@ export default function Historial() {
 
   const { datos: opciones } = useApi<OpcionesRespuesta>("/reportes/opciones");
 
-  function construirQuery(): string {
-    const p = new URLSearchParams();
-    p.set("tipo", filtros.tipo);
-    if (filtros.desde) p.set("desde", filtros.desde);
-    if (filtros.hasta) p.set("hasta", filtros.hasta);
-    if (filtros.sedeId) p.set("sedeId", filtros.sedeId);
-    if (filtros.categoriaId) p.set("categoriaId", filtros.categoriaId);
-    if (filtros.tecnicoId) p.set("tecnicoId", filtros.tecnicoId);
-    if (filtros.estado) p.set("estado", filtros.estado);
-    if (filtros.prioridad) p.set("prioridad", filtros.prioridad);
-    if (filtros.tipo === "actividades") p.set("agrupar", "categoria");
-    return p.toString();
-  }
+  const usaEstado = filtros.tipo !== "carga";
 
-  const [consulta, setConsulta] = useState(construirQuery());
+  const p = new URLSearchParams();
+  if (filtros.desde) p.set("desde", filtros.desde);
+  if (filtros.hasta) p.set("hasta", filtros.hasta);
+  if (filtros.sedeId) p.set("sedeId", filtros.sedeId);
+  if (filtros.categoriaId) p.set("categoriaId", filtros.categoriaId);
+  if (filtros.tecnicoId) p.set("tecnicoId", filtros.tecnicoId);
+  if (usaEstado && filtros.estado) p.set("estado", filtros.estado);
+  if (filtros.prioridad) p.set("prioridad", filtros.prioridad);
+  if (filtros.tipo === "actividades") p.set("agrupar", "categoria");
+  const qs = p.toString();
 
-  function buscar(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setConsulta(construirQuery());
-  }
-
-  const params = new URLSearchParams(consulta);
-  const tipo = params.get("tipo") ?? "cerrados";
-  params.delete("tipo");
-  const qs = params.toString();
-
-  const { datos, error, cargando } = useApi<Reporte>(`/reportes/${tipo}?${qs}`);
-
-  const usaEstado = filtros.tipo === "cerrados" || filtros.tipo === "actividades";
+  const { datos, error, cargando } = useApi<Reporte>(`/reportes/${filtros.tipo}?${qs}`);
 
   const columnasTextoLargo = ["resumen", "ubicacion", "titulo", "motivo", "folios"];
 
@@ -179,7 +160,7 @@ export default function Historial() {
     <>
       <h1 className="titulo-pagina">Historial y Reportes</h1>
 
-      <form onSubmit={buscar} className="panel mb-6 grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-5 print:hidden">
+      <div className="panel mb-6 grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-5 print:hidden">
         <div>
           <label htmlFor="tipo" className="etiqueta">
             Reporte
@@ -243,7 +224,7 @@ export default function Historial() {
         </div>
         <div>
           <label htmlFor="categoria" className="etiqueta">
-            Categoría
+            CategorÃ­a
           </label>
           <select
             id="categoria"
@@ -259,7 +240,7 @@ export default function Historial() {
         </div>
         <div>
           <label htmlFor="tecnico" className="etiqueta">
-            Técnico
+            TÃ©cnico
           </label>
           <select
             id="tecnico"
@@ -307,17 +288,14 @@ export default function Historial() {
           </select>
         </div>
         <div className="sm:col-span-2 lg:col-span-5 flex flex-wrap items-end gap-3">
-          <button type="submit" className="boton">
-            Consultar
-          </button>
           <span className="text-xs text-suave ml-2">
-            Si deja las fechas vacías se usan los últimos 30 días.
+            Si deja las fechas vacÃ­as se usan los Ãºltimos 30 dÃ­as.
           </span>
         </div>
-      </form>
+      </div>
 
       {error && <div className="alerta-error mb-4 print:hidden">{error}</div>}
-      {cargando && <p className="text-sm text-suave print:hidden">Cargando…</p>}
+      {cargando && <p className="text-sm text-suave print:hidden">Cargandoâ€¦</p>}
 
       {datos && (
         <>
@@ -326,7 +304,7 @@ export default function Historial() {
               <h2 className="text-lg font-semibold text-ciruela">{datos.titulo}</h2>
               <p className="text-sm text-suave">{datos.descripcion}</p>
               <p className="mt-1 text-xs text-suave">
-                {datos.filtros} · Generado: {datos.generado}
+                {datos.filtros} Â· Generado: {datos.generado}
               </p>
               {datos.resumen && <p className="mt-1 text-sm font-medium">{datos.resumen}</p>}
             </div>
@@ -379,7 +357,7 @@ export default function Historial() {
           </div>
           {datos.total > datos.filas.length && (
             <p className="mt-2 text-xs text-suave print:hidden">
-              Se muestran {datos.filas.length} de {datos.total} registros. La exportación incluye todos.
+              Se muestran {datos.filas.length} de {datos.total} registros. La exportaciÃ³n incluye todos.
             </p>
           )}
         </>
@@ -405,4 +383,3 @@ export default function Historial() {
     </>
   );
 }
-

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState } from "react";
 import { useApi } from "@/lib/api";
 
 const REPORTES: [string, string][] = [
@@ -46,12 +46,9 @@ export default function Reportes() {
   const [estado, setEstado] = useState("");
   const [prioridad, setPrioridad] = useState("");
   const [agrupar, setAgrupar] = useState("categoria");
-  const [consulta, setConsulta] = useState({ tipo: "cerrados", qs: "" });
-
   const { datos: opciones } = useApi<{ sedes: Opcion[]; categorias: Opcion[]; tecnicos: Opcion[] }>("/reportes/opciones");
-  const { datos, error, cargando } = useApi<Reporte>(`/reportes/${consulta.tipo}?${consulta.qs}`);
 
-  const usaEstado = tipo === "cerrados" || tipo === "actividades";
+  const usaEstado = tipo !== "carga";
 
   function construir(): string {
     const p = new URLSearchParams();
@@ -66,18 +63,17 @@ export default function Reportes() {
     return p.toString();
   }
 
-  function consultar(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setConsulta({ tipo, qs: construir() });
-  }
+  const qs = construir();
 
-  const base = `/api/reportes/${consulta.tipo}/exportar?${consulta.qs}${consulta.qs ? "&" : ""}formato=`;
+  const { datos, error, cargando } = useApi<Reporte>(`/reportes/${tipo}?${qs}`);
+
+  const base = `/api/reportes/${tipo}/exportar?${qs}${qs ? "&" : ""}formato=`;
 
   return (
     <>
       <h1 className="titulo-pagina">Reportes de antecedente</h1>
 
-      <form onSubmit={consultar} className="panel mb-6 grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="panel mb-6 grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-4">
         <div className="sm:col-span-2 lg:col-span-4">
           <label htmlFor="tipo" className="etiqueta">
             Reporte
@@ -179,12 +175,9 @@ export default function Reportes() {
           </div>
         )}
         <div className="flex flex-wrap items-end gap-3 sm:col-span-2 lg:col-span-4">
-          <button type="submit" className="boton">
-            Consultar
-          </button>
           <span className="text-xs text-suave">Si deja las fechas vacías se usan los últimos 30 días.</span>
         </div>
-      </form>
+      </div>
 
       {error && <div className="alerta-error mb-4">{error}</div>}
       {cargando && <p className="text-sm text-suave">Cargando…</p>}
