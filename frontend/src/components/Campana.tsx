@@ -52,6 +52,7 @@ export function Campana() {
     setAbierta(false);
     recargar();
     if (n.ticketId) router.push(`/tickets/${n.ticketId}`);
+    else router.push("/admin");
   }
 
   async function leerTodas() {

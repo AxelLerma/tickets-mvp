@@ -47,6 +47,8 @@ function FormUsuario({
   esYo,
   onListo,
   onCancelar,
+  setModoPadre,
+  onEliminar,
 }: {
   existente?: UsuarioAdmin;
   regiones: Opcion[];
@@ -54,6 +56,8 @@ function FormUsuario({
   esYo: boolean;
   onListo: (mensaje: string) => void;
   onCancelar: () => void;
+  setModoPadre: (modo: Modo) => void;
+  onEliminar: (id: number) => void;
 }) {
   const [rol, setRol] = useState<Rol>(existente?.rol ?? "reportante");
   const [activo, setActivo] = useState(existente?.activo ?? true);
@@ -168,9 +172,46 @@ function FormUsuario({
       </div>
       {esYo && <p className="text-sm text-suave">No puede cambiar su propio perfil ni desactivar su cuenta.</p>}
 
+      {existente && (
+        <div className="grid gap-5 sm:grid-cols-2">
+          <div>
+            <label htmlFor="password-edit" className="etiqueta">
+              Nueva contraseña (dejar vacío para conservar la actual)
+            </label>
+            <input id="password-edit" name="password" type="password" minLength={8} maxLength={72} autoComplete="new-password" className="entrada" />
+          </div>
+          <div className="flex items-end">
+            <button
+              type="button"
+              onClick={() => setModoPadre({ tipo: "password", usuario: existente })}
+              className="boton-secundario"
+            >
+              Usar formulario dedicado
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="flex gap-3">
         <button type="submit" disabled={enviando} className="boton">{enviando ? "Guardando…" : "Guardar"}</button>
         <button type="button" onClick={onCancelar} className="boton-secundario">Cancelar</button>
+        {existente && !esYo && (
+          <button
+            type="button"
+            onClick={() => {
+              if (
+                window.confirm(
+                  `¿Eliminar a ${existente.nombre} (${existente.correo})?\n\n${existente.rol === "tecnico" ? "Los tickets que tenga asignados o cerrados se reabrirán automáticamente para ser reasignados." : "Todos los tickets creados por este reportante se eliminarán permanentemente."}\n\nEsta acción no se puede deshacer.`,
+                )
+              ) {
+                onEliminar(existente.id);
+              }
+            }}
+            className="boton-secundario text-error border-error hover:bg-error hover:text-white"
+          >
+            Eliminar
+          </button>
+        )}
       </div>
     </form>
   );
@@ -188,15 +229,18 @@ function FormPassword({
   const [error, setError] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
 
+  const [mostrar, setMostrar] = useState(false);
+
   async function enviar(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
+    const password = String(f.get("password") ?? "");
     setError(null);
     setEnviando(true);
     try {
-      await api(`/admin/usuarios/${usuario.id}/password`, {
-        method: "POST",
-        body: JSON.stringify({ password: f.get("password") }),
+      await api(`/admin/usuarios/${usuario.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ password }),
       });
       onListo(`Contraseña de ${usuario.correo} actualizada. Sus sesiones abiertas se cerraron.`);
     } catch (err) {
@@ -211,7 +255,24 @@ function FormPassword({
       {error && <div className="alerta-error">{error}</div>}
       <div className="max-w-sm">
         <label htmlFor="password" className="etiqueta">Nueva contraseña</label>
-        <input id="password" name="password" type="password" required minLength={8} autoComplete="new-password" className="entrada" />
+        <div className="relative">
+          <input
+            id="password"
+            name="password"
+            type={mostrar ? "text" : "password"}
+            required
+            minLength={8}
+            autoComplete="new-password"
+            className="entrada pr-10"
+          />
+          <button
+            type="button"
+            onClick={() => setMostrar(!mostrar)}
+            className="absolute right-2 top-1/2 -translate-y-1/2 cursor-pointer text-xs text-suave hover:text-tinta"
+          >
+            {mostrar ? "Ocultar" : "Mostrar"}
+          </button>
+        </div>
       </div>
       <div className="flex gap-3">
         <button type="submit" disabled={enviando} className="boton">{enviando ? "Guardando…" : "Actualizar contraseña"}</button>
@@ -226,11 +287,22 @@ export default function Usuarios() {
   const { datos, error, cargando, recargar } = useApi<Datos>("/admin/usuarios");
   const [modo, setModo] = useState<Modo>(null);
   const [aviso, setAviso] = useState<string | null>(null);
+  const [errorAdmin, setErrorAdmin] = useState<string | null>(null);
 
   function terminar(mensaje: string) {
     setModo(null);
     setAviso(mensaje);
     recargar();
+  }
+
+  async function eliminarUsuario(id: number) {
+    try {
+      await api(`/admin/usuarios/${id}`, { method: "DELETE" });
+      terminar("Usuario eliminado.");
+    } catch (err) {
+      setAviso(null);
+      setErrorAdmin(err instanceof Error ? err.message : "No fue posible eliminar el usuario.");
+    }
   }
 
   return (
@@ -255,7 +327,15 @@ export default function Usuarios() {
       {datos && modo && (
         <div className="mb-6">
           {modo.tipo === "nuevo" && (
-            <FormUsuario regiones={datos.regiones} grupos={datos.grupos} esYo={false} onListo={terminar} onCancelar={() => setModo(null)} />
+            <FormUsuario
+              regiones={datos.regiones}
+              grupos={datos.grupos}
+              esYo={false}
+              onListo={terminar}
+              onCancelar={() => setModo(null)}
+              setModoPadre={setModo}
+              onEliminar={eliminarUsuario}
+            />
           )}
           {modo.tipo === "editar" && (
             <FormUsuario
@@ -266,6 +346,8 @@ export default function Usuarios() {
               esYo={modo.usuario.id === yo.id}
               onListo={terminar}
               onCancelar={() => setModo(null)}
+              setModoPadre={setModo}
+              onEliminar={eliminarUsuario}
             />
           )}
           {modo.tipo === "password" && (
@@ -277,15 +359,15 @@ export default function Usuarios() {
       {datos && (
         <div className="panel overflow-x-auto">
           <table className="w-full text-left text-sm">
-            <thead className="border-b-2 border-borde text-suave">
+            <thead className="bg-institucional text-white border-b-2 border-borde">
               <tr>
-                <th className="px-4 py-2 font-medium">Nombre</th>
-                <th className="px-4 py-2 font-medium">Correo</th>
-                <th className="px-4 py-2 font-medium">Perfil</th>
-                <th className="px-4 py-2 font-medium">Región</th>
-                <th className="px-4 py-2 font-medium">Grupo</th>
-                <th className="px-4 py-2 font-medium">Estado</th>
-                <th className="px-4 py-2 font-medium"><span className="sr-only">Acciones</span></th>
+                <th className="px-4 py-2.5 text-white font-semibold whitespace-nowrap">Nombre</th>
+                <th className="px-4 py-2.5 text-white font-semibold whitespace-nowrap">Correo</th>
+                <th className="px-4 py-2.5 text-white font-semibold whitespace-nowrap">Perfil</th>
+                <th className="px-4 py-2.5 text-white font-semibold whitespace-nowrap">Región</th>
+                <th className="px-4 py-2.5 text-white font-semibold whitespace-nowrap">Grupo</th>
+                <th className="px-4 py-2.5 text-white font-semibold whitespace-nowrap">Estado</th>
+                <th className="px-4 py-2.5 text-white font-semibold whitespace-nowrap"><span className="sr-only">Acciones</span></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-borde">
@@ -306,9 +388,23 @@ export default function Usuarios() {
                     </button>
                     <button
                       onClick={() => { setAviso(null); setModo({ tipo: "password", usuario: u }); }}
-                      className="ml-4 cursor-pointer text-institucional underline underline-offset-2"
+                      className="ml-2 cursor-pointer text-institucional underline underline-offset-2"
                     >
                       Contraseña
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            `¿Eliminar a ${u.nombre} (${u.correo})?\n\n${u.rol === "tecnico" ? "Los tickets que tenga asignados o cerrados se reabrirán automáticamente para ser reasignados." : "Todos los tickets creados por este reportante se eliminarán permanentemente."}\n\nEsta acción no se puede deshacer.`,
+                          )
+                        ) {
+                          eliminarUsuario(u.id);
+                        }
+                      }}
+                      className="ml-2 cursor-pointer text-error border-error hover:bg-error hover:text-white underline underline-offset-2"
+                    >
+                      Eliminar
                     </button>
                   </td>
                 </tr>

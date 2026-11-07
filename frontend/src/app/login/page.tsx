@@ -11,6 +11,29 @@ export default function Login() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
+  const [modo, setModo] = useState<"login" | "recuperar" | null>("login");
+  const [errorRecuperar, setErrorRecuperar] = useState<string | null>(null);
+  const [avisoRecuperar, setAvisoRecuperar] = useState<string | null>(null);
+  const [enviandoRecuperar, setEnviandoRecuperar] = useState(false);
+
+  async function enviarRecuperar(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const f = new FormData(e.currentTarget);
+    setErrorRecuperar(null);
+    setAvisoRecuperar(null);
+    setEnviandoRecuperar(true);
+    try {
+      await api("/auth/recuperar", {
+        method: "POST",
+        body: JSON.stringify({ correo: String(f.get("correo") ?? "").trim() }),
+      });
+      setAvisoRecuperar("Solicitud enviada. El administrador restablecerá su contraseña.");
+    } catch (err) {
+      setErrorRecuperar(err instanceof Error ? err.message : "No se pudo enviar la solicitud.");
+    } finally {
+      setEnviandoRecuperar(false);
+    }
+  }
 
   async function enviar(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -84,7 +107,29 @@ export default function Login() {
           <button type="submit" disabled={enviando} className="boton w-full">
             {enviando ? "Verificando…" : "Entrar"}
           </button>
+          <button
+            type="button"
+            onClick={() => setModo("recuperar")}
+            className="text-xs text-suave underline underline-offset-2 hover:text-tinta"
+          >
+            ¿Olvidó su contraseña?
+          </button>
         </form>
+        {modo === "recuperar" && (
+          <form onSubmit={enviarRecuperar} className="panel w-full max-w-sm mt-6 space-y-3 p-4">
+            <h3 className="text-sm font-semibold text-ciruela">Recuperación de contraseña</h3>
+            {errorRecuperar && <div className="alerta-error text-xs">{errorRecuperar}</div>}
+            {avisoRecuperar && <div className="text-xs text-suave">{avisoRecuperar}</div>}
+            <label htmlFor="correo-rec" className="etiqueta text-xs">Correo electrónico</label>
+            <input id="correo-rec" name="correo" type="email" required className="entrada text-xs" />
+            <button type="submit" disabled={enviandoRecuperar} className="boton w-full text-xs">
+              {enviandoRecuperar ? "Enviando…" : "Enviar solicitud al administrador"}
+            </button>
+            <button type="button" onClick={() => setModo(null)} className="boton-secundario w-full text-xs">
+              Volver al inicio de sesión
+            </button>
+          </form>
+        )}
       </section>
     </main>
   );

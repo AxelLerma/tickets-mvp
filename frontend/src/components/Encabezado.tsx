@@ -45,7 +45,7 @@ export function Encabezado() {
           </div>
           <div className="flex items-center gap-2 text-xs">
             <TemaToggle className="hover:text-white/80" />
-            {usuario.rol !== "admin" && <Campana />}
+            <Campana />
             <span className="ml-1 text-white/85">
               {usuario.nombre} · {NOMBRE_ROL[usuario.rol]}
             </span>

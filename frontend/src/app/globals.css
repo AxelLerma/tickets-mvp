@@ -115,19 +115,49 @@ html.oscuro .panel {
   .print\\:hidden {
     display: none !important;
   }
+  html.oscuro,
+  html.oscuro body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
   body {
-    background: #fff !important;
-    color: #000 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
   .panel {
     box-shadow: none !important;
     border: 1px solid #b49bd4 !important;
-    background: #fff !important;
+    background: #ffffff !important;
+    overflow: visible !important;
   }
   #tabla-reporte {
     width: 100% !important;
     display: table !important;
+    overflow: visible !important;
+  }
+  #tabla-reporte thead tr {
+    background: #0a454b !important;
+    color: #ffffff !important;
+  }
+  #tabla-reporte thead tr th {
+    background: #0a454b !important;
+    color: #ffffff !important;
+    border: none !important;
+  }
+  #tabla-reporte tbody tr td {
+    background: #ffffff !important;
+    color: #000000 !important;
+    border-color: #cbd5e1 !important;
+  }
+  .bg-institucional,
+  .text-institucional,
+  .border-institucional {
+    background: #0a454b !important;
+    color: #ffffff !important;
+    border-color: #0a454b !important;
   }
 }

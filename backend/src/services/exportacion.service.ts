@@ -18,9 +18,12 @@ export function aCsv(reporte: Reporte): Buffer {
 }
 
 const MORADO = "#4b2377";
-const LAVANDA = "#ece4f6";
+const INSTITUCIONAL_OSCURO = "#0a454b";
+const BLANCO = "#ffffff";
+const TEXTO_NEGRO = "#0f172a";
+const FILA_PAR = "#f3f0f8";
+const BORDE_FILA = "#cbd5e1";
 const MARGEN = 36;
-const ALTO_FILA = 20;
 
 export function aPdf(reporte: Reporte, filtros: string): Promise<Buffer> {
   return new Promise((resolver, rechazar) => {
@@ -36,7 +39,7 @@ export function aPdf(reporte: Reporte, filtros: string): Promise<Buffer> {
     const generado = new Intl.DateTimeFormat("es-MX", { dateStyle: "long", timeStyle: "short", timeZone: "America/Mexico_City" }).format(new Date());
 
     const encabezadoPagina = () => {
-      doc.fillColor(MORADO).font("Helvetica-Bold").fontSize(9).text("Instituto Electoral del Estado de Querétaro", MARGEN, MARGEN - 6);
+      doc.fillColor(INSTITUCIONAL_OSCURO).font("Helvetica-Bold").fontSize(9).text("Instituto Electoral del Estado de Querétaro", MARGEN, MARGEN - 6);
       doc.fillColor("#000").fontSize(15).text(reporte.titulo, MARGEN, doc.y + 2);
       doc.font("Helvetica").fontSize(8).fillColor("#444").text(`${filtros} · Generado: ${generado}`, MARGEN, doc.y + 2, { width: ancho });
       if (reporte.resumen) doc.font("Helvetica-Bold").text(reporte.resumen, MARGEN, doc.y + 2, { width: ancho });
@@ -44,37 +47,50 @@ export function aPdf(reporte: Reporte, filtros: string): Promise<Buffer> {
     };
 
     const encabezadoTabla = (y: number) => {
-      doc.rect(MARGEN, y, ancho, ALTO_FILA).fill(MORADO);
+      doc.rect(MARGEN, y, ancho, 22).fill(INSTITUCIONAL_OSCURO);
+      doc.moveTo(MARGEN, y + 22).lineTo(MARGEN + ancho, y + 22).stroke();
       let x = MARGEN;
-      doc.fillColor("#fff").font("Helvetica-Bold").fontSize(8);
+      doc.fillColor(BLANCO).font("Helvetica-Bold").fontSize(9);
       reporte.columnas.forEach((c, i) => {
-        doc.text(c.titulo, x + 4, y + 6, { width: anchos[i] - 8, height: 10, ellipsis: true });
+        doc.text(c.titulo, x + 4, y + 7, { width: anchos[i] - 8, height: 14, align: "left" });
         x += anchos[i];
       });
-      return y + ALTO_FILA;
+      return y + 22;
     };
 
     let y = encabezadoTabla(encabezadoPagina());
-    doc.font("Helvetica").fontSize(8);
+    doc.font("Helvetica").fontSize(8.5);
 
     if (reporte.filas.length === 0) {
-      doc.fillColor("#444").text("No hay registros con los filtros seleccionados.", MARGEN + 4, y + 8);
+      doc.fillColor(TEXTO_NEGRO).text("No hay registros con los filtros seleccionados.", MARGEN + 4, y + 8);
     }
 
     reporte.filas.forEach((fila, indice) => {
-      if (y + ALTO_FILA > doc.page.height - MARGEN - 16) {
+      let altoFila = 22;
+      reporte.columnas.forEach((c, i) => {
+        const textoCelda = String(fila[c.clave] ?? "");
+        const altoTexto = doc.heightOfString(textoCelda, { width: anchos[i] - 10 });
+        altoFila = Math.max(altoFila, altoTexto + 10);
+      });
+
+      if (y + altoFila > doc.page.height - MARGEN - 20) {
         doc.addPage();
         y = encabezadoTabla(encabezadoPagina());
-        doc.font("Helvetica").fontSize(8);
+        doc.font("Helvetica").fontSize(8.5);
       }
-      if (indice % 2 === 0) doc.rect(MARGEN, y, ancho, ALTO_FILA).fill(LAVANDA);
+
+      if (indice % 2 === 0) doc.rect(MARGEN, y, ancho, altoFila).fill(FILA_PAR);
+      else doc.rect(MARGEN, y, ancho, altoFila).fill(BLANCO);
+
+      doc.moveTo(MARGEN, y + altoFila).lineTo(MARGEN + ancho, y + altoFila).strokeColor(BORDE_FILA).stroke();
+
       let x = MARGEN;
-      doc.fillColor("#111");
+      doc.fillColor(TEXTO_NEGRO).font("Helvetica").fontSize(8.5);
       reporte.columnas.forEach((c, i) => {
-        doc.text(String(fila[c.clave] ?? ""), x + 4, y + 6, { width: anchos[i] - 8, height: 10, ellipsis: true });
+        doc.text(String(fila[c.clave] ?? ""), x + 4, y + 5, { width: anchos[i] - 10, height: altoFila - 10, align: "left", lineBreak: true });
         x += anchos[i];
       });
-      y += ALTO_FILA;
+      y += altoFila;
     });
 
     const rango = doc.bufferedPageRange();

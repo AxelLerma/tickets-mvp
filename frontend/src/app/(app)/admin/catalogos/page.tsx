@@ -72,6 +72,14 @@ function Bloque({
     accion(() => api(`/admin/catalogos/${seccion.clave}/${el.id}`, { method: "PATCH", body: JSON.stringify({ activo: !el.activo }) }));
   }
 
+  async function quitarElemento(el: Elemento) {
+    const confirmar = window.confirm(`¿Quitar '${el.nombre}' del catálogo? Ya no aparecerá en la lista ni en los formularios.`);
+    if (!confirmar) return;
+    accion(async () => {
+      await api(`/admin/catalogos/${seccion.clave}/${el.id}`, { method: "DELETE" });
+    });
+  }
+
   return (
     <section>
       <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-suave">{seccion.titulo}</h2>
@@ -118,6 +126,9 @@ function Bloque({
                     <button onClick={() => { setEditando(el.id); setTexto(el.nombre); }} className="cursor-pointer text-institucional underline underline-offset-2">Renombrar</button>
                     <button onClick={() => cambiarEstado(el)} className="cursor-pointer text-institucional underline underline-offset-2">
                       {el.activo ? "Desactivar" : "Activar"}
+                    </button>
+                    <button onClick={() => quitarElemento(el)} className="cursor-pointer text-error border-error hover:bg-error hover:text-white underline underline-offset-2">
+                      Quitar
                     </button>
                   </>
                 )}

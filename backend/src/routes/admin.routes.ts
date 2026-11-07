@@ -102,6 +102,7 @@ const editarUsuarioSchema = z.object({
   regionId: z.number().int().positive().nullable().default(null),
   grupoId: z.number().int().positive().nullable().default(null),
   activo: z.boolean(),
+  password: z.string().min(8, "La contraseña debe tener al menos 8 caracteres.").max(72, "La contraseña no puede exceder 72 caracteres.").optional(),
 });
 
 router.patch("/usuarios/:id", async (req, res) => {
@@ -131,21 +132,111 @@ router.patch("/usuarios/:id", async (req, res) => {
 
   const regionId = await regionParaRol(d.rol, d.regionId);
   const grupoId = await grupoParaRol(d.rol, d.grupoId);
+  let incrementoVersion = d.rol !== actual.rol ? 1 : 0;
   await transaccion(async () => {
-    await ejecutar(
-      `UPDATE usuarios
-          SET nombre = ?, telefono = ?, rol = ?, region_id = ?, grupo_id = ?, activo = ?,
-              sesion_version = sesion_version + ?
-        WHERE id = ?`,
-      [d.nombre, d.telefono, d.rol, regionId, grupoId, d.activo, d.rol !== actual.rol ? 1 : 0, id],
-    );
+    const setCampos = [
+      "nombre = ?",
+      "telefono = ?",
+      "rol = ?",
+      "region_id = ?",
+      "grupo_id = ?",
+      "activo = ?",
+    ];
+    const valores: unknown[] = [d.nombre, d.telefono, d.rol, regionId, grupoId, d.activo];
+    if (d.password) {
+      const hash = await bcrypt.hash(d.password, 10);
+      setCampos.push("password_hash = ?");
+      valores.push(hash);
+      incrementoVersion = 1;
+    }
+    setCampos.push("sesion_version = sesion_version + ?");
+    valores.push(incrementoVersion);
+    valores.push(id);
+    await ejecutar(`UPDATE usuarios SET ${setCampos.join(", ")} WHERE id = ?`, valores);
     await registrarEvento({
       usuarioId: req.usuario!.id,
       entidad: "usuario",
       entidadId: id,
-      evento: "usuario_modificado",
+      evento: d.password ? "password_restablecida" : "usuario_modificado",
       antes: { nombre: actual.nombre, rol: actual.rol, regionId: actual.regionId, grupoId: actual.grupoId, activo: actual.activo },
-      despues: { nombre: d.nombre, rol: d.rol, regionId, grupoId, activo: d.activo },
+      despues: { nombre: d.nombre, rol: d.rol, regionId, grupoId, activo: d.activo, password: !!d.password },
+    });
+  });
+
+  res.json({ ok: true });
+});
+
+router.delete("/usuarios/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  if (id === req.usuario!.id) throw new ErrorNegocio("No puede eliminar su propio usuario.", 403);
+
+  const actual = await uno<{ id: number; nombre: string; correo: string; rol: Rol }>(
+    "SELECT id, nombre, correo, rol FROM usuarios WHERE id = ?",
+    [id],
+  );
+  if (!actual) throw new ErrorNegocio("Usuario no encontrado.", 404);
+
+  await transaccion(async () => {
+    await ejecutar("SELECT set_config('app.bypass_inmutabilidad', '1', true)");
+
+    const ticketsReportante = await consultar<{ id: number }>("SELECT id FROM tickets WHERE reportante_id = ?", [id]);
+    const ticketIds = ticketsReportante.map((t) => t.id);
+
+    if (actual.rol === "reportante" && ticketIds.length > 0) {
+      const idsLista = ticketIds.join(", ");
+      await ejecutar(`DELETE FROM notificaciones WHERE ticket_id IN (${idsLista})`);
+      await ejecutar(`DELETE FROM ticket_relaciones WHERE ticket_id IN (${idsLista}) OR relacionado_id IN (${idsLista})`);
+      await ejecutar(`DELETE FROM ticket_esperas WHERE ticket_id IN (${idsLista})`);
+      await ejecutar(`DELETE FROM ticket_comentarios WHERE ticket_id IN (${idsLista})`);
+      await ejecutar(`DELETE FROM ticket_troubleshooting WHERE ticket_id IN (${idsLista})`);
+      await ejecutar(`DELETE FROM ticket_evidencias WHERE ticket_id IN (${idsLista})`);
+      await ejecutar(`DELETE FROM ticket_intervencion WHERE ticket_id IN (${idsLista})`);
+      await ejecutar(`DELETE FROM bitacora_auditoria WHERE entidad = 'ticket' AND entidad_id IN (${idsLista})`);
+      await ejecutar(`DELETE FROM tickets WHERE id IN (${idsLista})`);
+    }
+
+    if (actual.rol === "tecnico") {
+      const ticketsTecnico = await consultar<{
+        id: number; folio: string; titulo: string; cerrado_en: string | null;
+      }>("SELECT id, folio, titulo, cerrado_en FROM tickets WHERE tecnico_id = ? AND estado <> 'cancelado'", [id]);
+      for (const t of ticketsTecnico) {
+        await ejecutar(
+          `UPDATE tickets SET estado = 'reabierto', tecnico_id = NULL, reabierto_en = NOW() WHERE id = ?`,
+          [t.id],
+        );
+        await ejecutar(
+          `UPDATE ticket_intervencion SET que_se_hizo = NULL, como_se_dejo = NULL, motivo_cierre_id = NULL WHERE ticket_id = ?`,
+          [t.id],
+        );
+        await ejecutar(
+          `INSERT INTO ticket_comentarios (ticket_id, usuario_id, texto, tipo, creado_en) VALUES (?, NULL, ?, 'sistema', NOW())`,
+          [t.id, "Ticket reabierto automáticamente por eliminación del perfil del técnico asignado"],
+        );
+        await registrarEvento({
+          usuarioId: null,
+          entidad: "ticket",
+          entidadId: t.id,
+          evento: "reapertura",
+          comentario: "Ticket reabierto automáticamente por eliminación del perfil del técnico asignado",
+        });
+      }
+    }
+
+    await ejecutar("DELETE FROM notificaciones WHERE usuario_id = ?", [id]);
+    await ejecutar("UPDATE bitacora_auditoria SET usuario_id = NULL WHERE usuario_id = ?", [id]);
+    await ejecutar("UPDATE ticket_comentarios SET usuario_id = NULL WHERE usuario_id = ?", [id]);
+    await ejecutar("UPDATE ticket_esperas SET usuario_id = NULL WHERE usuario_id = ?", [id]);
+    await ejecutar("UPDATE ticket_troubleshooting SET tecnico_id = NULL WHERE tecnico_id = ?", [id]);
+    await ejecutar("UPDATE ticket_evidencias SET subido_por_id = NULL WHERE subido_por_id = ?", [id]);
+    await ejecutar("UPDATE ticket_relaciones SET creada_por = NULL WHERE creada_por = ?", [id]);
+
+    await ejecutar("DELETE FROM usuarios WHERE id = ?", [id]);
+    await registrarEvento({
+      usuarioId: req.usuario!.id,
+      entidad: "usuario",
+      entidadId: id,
+      evento: "usuario_eliminado",
+      despues: { nombre: actual.nombre, correo: actual.correo, rol: actual.rol },
     });
   });
 
@@ -200,13 +291,78 @@ router.get("/catalogos", async (_req, res) => {
   for (const [clave, c] of Object.entries(CATALOGOS)) {
     const columnasPadre = c.padre ? `, x.${c.padre.columna} AS padre_id, p.nombre AS padre` : "";
     const unirPadre = c.padre ? `LEFT JOIN ${c.padre.tabla} p ON p.id = x.${c.padre.columna}` : "";
-    const donde = c.fijo ? `WHERE x.${c.fijo.columna} = ?` : "";
+    const donde = c.fijo ? `WHERE x.${c.fijo.columna} = ?` : "WHERE";
+    const clausulaOculto = c.fijo ? ` AND x.oculto = FALSE` : ` x.oculto = FALSE`;
     resultado[clave] = await consultar(
-      `SELECT x.id, x.nombre, x.activo${columnasPadre} FROM ${c.tabla} x ${unirPadre} ${donde} ORDER BY x.nombre`,
+      `SELECT x.id, x.nombre, x.activo${columnasPadre} FROM ${c.tabla} x ${unirPadre} ${donde}${clausulaOculto} ORDER BY x.nombre`,
       c.fijo ? [c.fijo.valor] : [],
     );
   }
   res.json(resultado);
+});
+
+router.delete("/catalogos/:tipo/:id", async (req, res) => {
+  const tipo = String(req.params.tipo);
+  const c = configDe(tipo);
+  const id = Number(req.params.id);
+
+  const actual = await uno<{ nombre: string }>(`SELECT nombre FROM ${c.tabla} WHERE id = ?`, [id]);
+  if (!actual) throw new ErrorNegocio("Elemento no encontrado.", 404);
+
+  await transaccion(async () => {
+    let tieneReferencias = false;
+
+    if (tipo === "regiones") {
+      const [usuariosRef, sedesRef] = await Promise.all([
+        uno<{ n: number }>("SELECT COUNT(*) AS n FROM usuarios WHERE region_id = ?", [id]),
+        uno<{ n: number }>("SELECT COUNT(*) AS n FROM sedes WHERE region_id = ?", [id]),
+      ]);
+      if ((usuariosRef!.n ?? 0) > 0 || (sedesRef!.n ?? 0) > 0) tieneReferencias = true;
+      if (tieneReferencias) {
+        await ejecutar("UPDATE usuarios SET region_id = NULL WHERE region_id = ?", [id]);
+        await ejecutar("UPDATE sedes SET activo = FALSE, oculto = TRUE WHERE region_id = ?", [id]);
+      }
+    } else if (tipo === "grupos") {
+      const ref = await uno<{ n: number }>("SELECT COUNT(*) AS n FROM usuarios WHERE grupo_id = ?", [id]);
+      if ((ref!.n ?? 0) > 0) tieneReferencias = true;
+      if (tieneReferencias) {
+        await ejecutar("UPDATE usuarios SET grupo_id = NULL WHERE grupo_id = ?", [id]);
+      }
+    } else if (tipo === "categorias") {
+      const ref = await uno<{ n: number }>("SELECT COUNT(*) AS n FROM tickets WHERE categoria_id = ?", [id]);
+      const subs = await uno<{ n: number }>("SELECT COUNT(*) AS n FROM subcategorias WHERE categoria_id = ?", [id]);
+      if ((ref!.n ?? 0) > 0 || (subs!.n ?? 0) > 0) tieneReferencias = true;
+      if (tieneReferencias) {
+        await ejecutar("UPDATE subcategorias SET oculto = TRUE WHERE categoria_id = ?", [id]);
+      }
+    } else if (tipo === "sedes") {
+      const ref = await uno<{ n: number }>("SELECT COUNT(*) AS n FROM tickets WHERE sede_id = ?", [id]);
+      if ((ref!.n ?? 0) > 0) tieneReferencias = true;
+    } else if (tipo === "subcategorias") {
+      const ref = await uno<{ n: number }>("SELECT COUNT(*) AS n FROM tickets WHERE subcategoria_id = ?", [id]);
+      if ((ref!.n ?? 0) > 0) tieneReferencias = true;
+    } else if (tipo.startsWith("motivos-")) {
+      const ref = await uno<{ n: number }>("SELECT COUNT(*) AS n FROM ticket_esperas WHERE motivo_id = ?", [id]);
+      const ref2 = await uno<{ n: number }>("SELECT COUNT(*) AS n FROM ticket_intervencion WHERE motivo_cierre_id = ?", [id]);
+      if ((ref!.n ?? 0) > 0 || (ref2!.n ?? 0) > 0) tieneReferencias = true;
+    }
+
+    if (tieneReferencias) {
+      await ejecutar(`UPDATE ${c.tabla} SET activo = FALSE, oculto = TRUE WHERE id = ?`, [id]);
+    } else {
+      await ejecutar(`DELETE FROM ${c.tabla} WHERE id = ?`, [id]);
+    }
+
+    await registrarEvento({
+      usuarioId: req.usuario!.id,
+      entidad: `catalogo_${tipo}`,
+      entidadId: id,
+      evento: "catalogo_eliminado",
+      despues: { nombre: actual.nombre, oculto: tieneReferencias },
+    });
+  });
+
+  res.json({ ok: true });
 });
 
 const nuevoCatalogoSchema = z.object({

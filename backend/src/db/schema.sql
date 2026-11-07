@@ -130,6 +130,11 @@ CREATE INDEX IF NOT EXISTS idx_evidencias_ticket ON ticket_evidencias(ticket_id)
 
 CREATE OR REPLACE FUNCTION bloquear_modificacion() RETURNS trigger AS $$
 BEGIN
+  IF current_setting('app.bypass_inmutabilidad', true) = '1' THEN
+    IF TG_OP = 'DELETE' THEN RETURN OLD;
+    ELSE RETURN NEW;
+    END IF;
+  END IF;
   RAISE EXCEPTION '%', TG_ARGV[0];
 END;
 $$ LANGUAGE plpgsql;

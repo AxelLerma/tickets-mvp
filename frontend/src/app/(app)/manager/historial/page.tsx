@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { useApi } from "@/lib/api";
 import { fechaHora } from "@/lib/formato";
-import type { Opcion } from "@/lib/tipos";
 
 const REPORTES: [string, string][] = [
   ["cerrados", "Historial de tickets cerrados"],
@@ -123,6 +122,8 @@ export default function Historial() {
 
   const usaEstado = filtros.tipo === "cerrados" || filtros.tipo === "actividades";
 
+  const columnasTextoLargo = ["resumen", "ubicacion", "titulo", "motivo", "folios"];
+
   function exportarCsv() {
     if (!datos) return;
     const headers = datos.columnas
@@ -153,7 +154,24 @@ export default function Historial() {
     URL.revokeObjectURL(url);
   }
 
-  function imprimir() {
+  async function exportarPdf() {
+    if (!datos) return;
+    try {
+      const respuesta = await fetch(`/api/reportes/${datos.tipo}/exportar?${qs}&formato=pdf`);
+      if (!respuesta.ok) throw new Error("No se pudo generar el PDF.");
+      const blob = await respuesta.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `reporte-${datos.tipo}-${hoyLocal()}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  function imprimirVista() {
     window.print();
   }
 
@@ -316,24 +334,27 @@ export default function Historial() {
               <button type="button" onClick={exportarCsv} className="boton-secundario">
                 Exportar CSV
               </button>
-              <button type="button" onClick={imprimir} className="boton">
-                Exportar PDF / Imprimir
+              <button type="button" onClick={exportarPdf} className="boton">
+                Exportar PDF
+              </button>
+              <button type="button" onClick={imprimirVista} className="boton-secundario">
+                Imprimir vista
               </button>
             </div>
           </div>
 
           <div className="panel overflow-x-auto">
             <table className="w-full text-left text-sm" id="tabla-reporte">
-              <thead className="border-b-2 border-borde text-suave">
+              <thead className="bg-institucional text-white border-b-2 border-borde">
                 <tr>
                   {datos.columnas.map((c) => (
-                    <th key={c.clave} className="whitespace-nowrap px-4 py-2 font-medium">
+                    <th key={c.clave} className="px-4 py-2.5 text-white font-semibold whitespace-nowrap">
                       {c.titulo}
                     </th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-borde">
+              <tbody className="divide-y divide-borde text-tinta">
                 {datos.filas.length === 0 && (
                   <tr>
                     <td colSpan={datos.columnas.length} className="px-4 py-6 text-center text-suave">
@@ -344,7 +365,10 @@ export default function Historial() {
                 {datos.filas.map((fila, i) => (
                   <tr key={i} className="hover:bg-fondo">
                     {datos.columnas.map((c) => (
-                      <td key={c.clave} className="px-4 py-2 align-top">
+                      <td
+                        key={c.clave}
+                        className={`px-4 py-2 align-top ${columnasTextoLargo.includes(c.clave) ? "whitespace-normal break-words" : "whitespace-nowrap"}`}
+                      >
                         {fila[c.clave]}
                       </td>
                     ))}
@@ -384,3 +408,4 @@ export default function Historial() {
     </>
   );
 }
+

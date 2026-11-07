@@ -212,16 +212,16 @@ export default function Reportes() {
 
           <div className="panel overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead className="border-b-2 border-borde text-suave">
+              <thead className="bg-institucional text-white border-b-2 border-borde">
                 <tr>
                   {datos.columnas.map((c) => (
-                    <th key={c.clave} className="whitespace-nowrap px-4 py-2 font-medium">
+                    <th key={c.clave} className="whitespace-nowrap px-4 py-2.5 text-white font-semibold">
                       {c.titulo}
                     </th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-borde">
+              <tbody className="divide-y divide-borde text-tinta">
                 {datos.filas.length === 0 && (
                   <tr>
                     <td colSpan={datos.columnas.length} className="px-4 py-6 text-center text-suave">
@@ -232,7 +232,10 @@ export default function Reportes() {
                 {datos.filas.map((fila, i) => (
                   <tr key={i} className="hover:bg-fondo">
                     {datos.columnas.map((c) => (
-                      <td key={c.clave} className="px-4 py-2 align-top">
+                      <td
+                        key={c.clave}
+                        className={`px-4 py-2 align-top ${["resumen", "ubicacion", "titulo", "motivo", "folios"].includes(c.clave) ? "whitespace-normal break-words" : "whitespace-nowrap"}`}
+                      >
                         {fila[c.clave]}
                       </td>
                     ))}
