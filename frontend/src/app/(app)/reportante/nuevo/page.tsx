@@ -14,7 +14,7 @@ function Formulario() {
   const { datos: catalogos, error: errorCatalogos } = useApi<Catalogos>("/catalogos");
   const [categoriaId, setCategoriaId] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [aviso, setAviso] = useState<{ id: number; mensaje: string } | null>(null);
+  const [aviso, setAviso] = useState<{ id: number; mensaje: string; exito?: boolean } | null>(null);
   const [progreso, setProgreso] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
 
@@ -54,8 +54,11 @@ function Formulario() {
 
     try {
       for (const [i, archivo] of archivos.entries()) {
-        setProgreso(`Subiendo archivo ${i + 1} de ${archivos.length}…`);
-        await subirArchivo(archivo, { ticketId: String(ticket.id), etapa: "inicial_reportante" });
+        await subirArchivo(
+          archivo,
+          { ticketId: String(ticket.id), etapa: "inicial_reportante" },
+          (p) => setProgreso(`Archivo ${i + 1} de ${archivos.length}: ${p}%`),
+        );
       }
     } catch (err) {
       setProgreso(null);
@@ -66,6 +69,8 @@ function Formulario() {
       });
       return;
     }
+    setAviso({ id: ticket.id, mensaje: "Reporte y evidencias subidos correctamente.", exito: true });
+    await new Promise((r) => setTimeout(r, 2000));
     router.push(`/tickets/${ticket.id}`);
   }
 
@@ -83,11 +88,13 @@ function Formulario() {
       )}
       {(error || errorCatalogos) && <div className="alerta-error mb-4">{error ?? errorCatalogos}</div>}
       {aviso && (
-        <div className="alerta-error mb-4">
-          {aviso.mensaje}{" "}
-          <Link href={`/tickets/${aviso.id}`} className="underline">
-            Ver reporte y adjuntar de nuevo
-          </Link>
+        <div className={`mb-4 p-3 rounded border ${aviso.exito ? "bg-aqua-claro border-institucional text-institucional-oscuro" : "alerta-error"}`}>
+          {aviso.mensaje}
+          {!aviso.exito && (
+            <Link href={`/tickets/${aviso.id}`} className="underline ml-2">
+              Ver reporte y adjuntar de nuevo
+            </Link>
+          )}
         </div>
       )}
 

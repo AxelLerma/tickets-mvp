@@ -23,6 +23,7 @@ export function Evidencias({ ticketId, evidencias, etapasPermitidas, alCambiar }
   const [elegida, setElegida] = useState<Etapa | null>(null);
   const [progreso, setProgreso] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [visor, setVisor] = useState<Evidencia | null>(null);
 
   const etapa = elegida && etapasPermitidas.includes(elegida) ? elegida : etapasPermitidas[0];
 
@@ -54,7 +55,18 @@ export function Evidencias({ ticketId, evidencias, etapasPermitidas, alCambiar }
         <ul className="divide-y divide-borde">
           {evidencias.map((ev) => (
             <li key={ev.id} className={`flex gap-3 py-3 ${ev.reemplazadaPor ? "opacity-60" : ""}`}>
-              <a href={`/api/evidencias/${ev.id}/archivo`} target="_blank" rel="noreferrer" className="shrink-0">
+              <a
+                href={`/api/evidencias/${ev.id}/archivo`}
+                target="_blank"
+                rel="noreferrer"
+                className="shrink-0"
+                onClick={(e) => {
+                  if (ev.mime.startsWith("image/")) {
+                    e.preventDefault();
+                    setVisor(ev);
+                  }
+                }}
+              >
                 {ev.tieneMiniatura ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -138,6 +150,26 @@ export function Evidencias({ ticketId, evidencias, etapasPermitidas, alCambiar }
               <p className="mt-1 text-xs text-suave">Subiendo… {progreso}%</p>
             </div>
           )}
+        </div>
+      )}
+      {visor && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4"
+          onClick={() => setVisor(null)}
+        >
+          <button
+            className="absolute right-4 top-4 text-white text-3xl hover:text-gray-300"
+            onClick={() => setVisor(null)}
+            aria-label="Cerrar visor"
+          >
+            &times;
+          </button>
+          <img
+            src={`/api/evidencias/${visor.id}/archivo`}
+            alt={visor.nombre}
+            className="max-h-full max-w-full object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
         </div>
       )}
     </section>

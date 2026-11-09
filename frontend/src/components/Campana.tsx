@@ -82,7 +82,7 @@ export function Campana() {
       </button>
 
       {abierta && (
-        <div className="panel absolute right-0 top-full z-30 mt-2 w-[min(22rem,calc(100vw-1.5rem))] text-tinta">
+        <div className="panel fixed left-4 right-4 top-16 z-50 sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:w-80 text-tinta shadow-xl">
           <div className="flex items-center justify-between border-b-2 border-borde px-4 py-2">
             <p className="text-sm font-semibold text-ciruela">Notificaciones</p>
             {sinLeer > 0 && (

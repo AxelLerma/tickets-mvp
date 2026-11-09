@@ -22,6 +22,8 @@ const TIPOS_PERMITIDOS: Record<string, string> = {
   "video/mp4": ".mp4",
   "video/webm": ".webm",
   "video/quicktime": ".mov",
+  "video/x-m4v": ".mp4",
+  "video/3gpp": ".3gp",
 };
 
 export const DIR_TMP = path.join(config.storageDir, "tmp");
@@ -63,7 +65,7 @@ export async function guardarEvidencia(usuario: UsuarioSesion, datos: DatosSubid
     const tipo = await fileTypeFromFile(datos.archivo.path);
     const extension = tipo ? TIPOS_PERMITIDOS[tipo.mime] : undefined;
     if (!tipo || !extension) {
-      throw new ErrorNegocio("Tipo de archivo no permitido. Use imagen (JPG, PNG, WebP), PDF o video (MP4, WebM, MOV).", 415);
+      throw new ErrorNegocio("Tipo de archivo no permitido. Use imagen, PDF o video corto.", 415);
     }
 
     let anterior: { id: number; etapa: string; autorId: number } | undefined;
@@ -86,7 +88,7 @@ export async function guardarEvidencia(usuario: UsuarioSesion, datos: DatosSubid
     destino = path.join(config.storageDir, rutaArchivo);
     await rename(datos.archivo.path, destino);
 
-    if (tipo.mime.startsWith("image/")) {
+    if (tipo.mime === "image/jpeg" || tipo.mime === "image/png" || tipo.mime === "image/webp") {
       try {
         const rutaMiniatura = path.join("miniaturas", `${nombre}.jpg`);
         miniatura = path.join(config.storageDir, rutaMiniatura);
