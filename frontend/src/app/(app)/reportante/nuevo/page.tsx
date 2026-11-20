@@ -17,6 +17,7 @@ function Formulario() {
   const [aviso, setAviso] = useState<{ id: number; mensaje: string; exito?: boolean } | null>(null);
   const [progreso, setProgreso] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
+  const [confirmacion, setConfirmacion] = useState<{ id: number; folio: string; titulo: string } | null>(null);
 
   const subcategorias = catalogos?.subcategorias.filter((s) => String(s.categoriaId) === categoriaId) ?? [];
 
@@ -24,8 +25,11 @@ function Formulario() {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
     const archivos = (f.getAll("archivos") as File[]).filter((a) => a.size > 0);
+    const titulo = (f.get("titulo") as string) || "";
     setError(null);
     setAviso(null);
+    setConfirmacion(null);
+    setProgreso(null);
     setEnviando(true);
 
     let ticket: Ticket;
@@ -33,7 +37,7 @@ function Formulario() {
       const r = await api<{ ticket: Ticket }>("/tickets", {
         method: "POST",
         body: JSON.stringify({
-          titulo: f.get("titulo"),
+          titulo,
           categoriaId: Number(f.get("categoriaId")),
           subcategoriaId: Number(f.get("subcategoriaId")) || null,
           sedeId: Number(f.get("sedeId")),
@@ -69,9 +73,9 @@ function Formulario() {
       });
       return;
     }
-    setAviso({ id: ticket.id, mensaje: "Reporte y evidencias subidos correctamente.", exito: true });
-    await new Promise((r) => setTimeout(r, 2000));
-    router.push(`/tickets/${ticket.id}`);
+    setProgreso(null);
+    setEnviando(false);
+    setConfirmacion({ id: ticket.id, folio: ticket.folio, titulo });
   }
 
   return (
@@ -220,9 +224,64 @@ function Formulario() {
         </div>
 
         <button type="submit" disabled={enviando} className="boton w-full">
-          {enviando ? (progreso ?? "Enviando…") : "Enviar reporte"}
+          {enviando ? "Creando ticket y subiendo evidencia..." : "Enviar reporte"}
         </button>
       </form>
+
+      {confirmacion && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={() => setConfirmacion(null)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm border border-borde"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-center gap-3 mb-3">
+              <span className="text-3xl">✅</span>
+              <h2 className="text-xl font-bold text-tinta">
+                ¡Ticket registrado correctamente!
+              </h2>
+            </div>
+            <p className="text-sm text-suave mb-4">
+              Su solicitud ha sido creada y las evidencias se almacenaron de forma
+              segura.
+            </p>
+            <div className="space-y-2 mb-6 text-sm">
+              <div className="flex justify-between border-b border-borde pb-2">
+                <span className="text-suave">Folio / ID</span>
+                <span className="font-medium text-tinta">#{confirmacion.id}</span>
+              </div>
+              <div className="flex justify-between border-b border-borde pb-2">
+                <span className="text-suave">Título</span>
+                <span className="font-medium text-tinta truncate">{confirmacion.titulo}</span>
+              </div>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                onClick={() => {
+                  setConfirmacion(null);
+                  router.push(`/tickets/${confirmacion.id}`);
+                }}
+                className="boton w-full sm:w-auto"
+              >
+                Ver seguimiento del ticket
+              </button>
+              <button
+                onClick={() => {
+                  setConfirmacion(null);
+                  router.push("/reportante/nuevo");
+                }}
+                className="px-4 py-2 bg-borde text-tinta hover:bg-lavanda rounded-md text-sm font-medium transition-colors w-full sm:w-auto"
+              >
+                Registrar otro ticket
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
