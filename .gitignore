@@ -4,9 +4,11 @@ node_modules/
 
 # Variables de entorno y secretos
 .env
-.env*.local
+.env.*
+!.env.example
 **/.env
-**/.env*.local
+**/.env.*
+!**/.env.example
 
 # Builds de Next.js y TypeScript
 .next/
@@ -16,12 +18,13 @@ dist/
 **/.next/
 **/.turbo/
 
-# Archivos de subida y almacenamiento privado
+# Archivos de subida y almacenamiento privado (evidencias del backend)
 storage/
 **/storage/
 **/storage/evidencias/
 **/storage/miniaturas/
 **/storage/tmp/
+backend/storage/
 
 # Respaldos de base de datos generados por script
 respaldos/
@@ -40,3 +43,6 @@ yarn-debug.log*
 yarn-error.log*
 .DS_Store
 Thumbs.db
+
+# Ejecutable de Cloudflare Tunnel
+cloudflared*.exe

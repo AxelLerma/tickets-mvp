@@ -23,11 +23,11 @@ Plataforma web progresiva (PWA) de nivel empresarial desarrollada para el **Inst
 | :--- | :--- | :--- |
 | **Frontend** | Next.js 16 (App Router, Turbopack) | Renderizado híbrido, enrutamiento modular y compilación ultrarrápida. |
 | **Librería UI** | React 19 & Tailwind CSS v4 | Componentes declarativos, diseño responsivo y Modo Oscuro nativo. |
-| **Backend** | Node.js & Express 5 | API REST desacoplada, concurrencia eficiente y arquitectura de servicios. |
+| **Backend** | Node.js 26 LTS & Express 5 | API REST desacoplada, concurrencia eficiente y arquitectura de servicios. |
 | **Lenguaje** | TypeScript | Tipado estricto de extremo a extremo, prevención de errores en compilación y contratos de datos robustos. |
 | **Base de Datos** | PostgreSQL 15 | Integridad relacional, transacciones ACID, tipos JSONB y triggers de inmutabilidad en PL/pgSQL. |
 | **Validación** | Zod | Validación estricta de esquemas y sanitización de entradas contra inyecciones. |
-| **Seguridad** | JWT & Bcrypt | Sesiones seguras en cookies `HttpOnly` y hashing robusto de contraseñas. |
+| **Seguridad** | JWT & bcryptjs | Sesiones seguras en cookies `HttpOnly` y hashing robusto de contraseñas con `bcryptjs` ^3. |
 | **Almacenamiento** | Privado local & Sharp | Procesamiento de miniaturas para imágenes y almacenamiento aislado de evidencias. |
 | **Notificaciones** | In-App & Nodemailer (SMTP) | Alertas visuales adaptativas y cola de salida de correos transaccionales con reintentos automáticos. |
 | **Infraestructura** | Docker Compose & Cloudflare Tunnels | Despliegue en contenedores aislados y acceso remoto seguro sin apertura de puertos. |
@@ -97,7 +97,7 @@ La forma recomendada de levantar el entorno completo (base de datos, backend y f
 ## Instalación y Ejecución Manual (Desarrollo Local)
 
 ### Requisitos Previos
-* **Node.js:** Versión 20 o superior.
+* **Node.js:** Versión 26 LTS o superior (ver `.nvmrc` y `.node-version` en la raíz).
 * **PostgreSQL:** Versión 14 o superior instalado y ejecutándose.
 
 ---
